@@ -1,0 +1,451 @@
+#include "mqtt.h"
+#include "types.h"
+#include <ArduinoJson.h>
+#include <Preferences.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
+
+// MQTT-Config
+const char *mqtt_server = "";
+const uint16_t mqtt_port = 0;
+const char *mqtt_user = "";
+const char *mqtt_pass = "";
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+void publishConfigsForHA();
+
+// Externe Variablen aus deinem Code
+extern float weight;
+extern uint16_t presetLeft;
+extern uint16_t presetRight;
+extern float scaleFactor;
+extern float blockThreshold;
+extern volatile State state;
+
+extern unsigned long presetsLeftRun;
+extern unsigned long presetsRightRun;
+extern float totalWeight;
+
+extern PresetSelection selectedPreset;
+
+extern String stateToString(State s);
+
+extern Preferences prefs;
+
+extern void savePreferences();
+extern void setRemainingTime();
+extern void setPreset(PresetSelection selection);
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+    LOGF("[CALLBACK] %s\n", topic);
+
+    String message;
+    for (unsigned int i = 0; i < length; i++)
+    {
+        message += (char)payload[i];
+    }
+
+    LOGF("[CALLBACK] %s\n", message);
+
+    if (String(topic) == "coffeegrinder/preset_left/set")
+    {
+        presetLeft = message.toFloat() * 10;
+        savePreferences();
+        setRemainingTime();
+    }
+    else if (String(topic) == "coffeegrinder/preset_right/set")
+    {
+        presetRight = message.toFloat() * 10;
+        savePreferences();
+        setRemainingTime();
+    }
+    else if (String(topic) == "coffeegrinder/block_threshold/set")
+    {
+        blockThreshold = message.toFloat();
+        savePreferences();
+        setRemainingTime();
+    }
+    else if (String(topic) == "coffeegrinder/cmd/start")
+    {
+        extern bool webStart;
+        extern void startGrinding(bool);
+        webStart = true;
+        startGrinding(true);
+    }
+    else if (String(topic) == "coffeegrinder/cmd/start_right")
+    {
+        extern bool webStart;
+        extern void startGrinding(bool);
+        setPreset(RIGHT);
+        webStart = true;
+        startGrinding(true);
+    }
+    else if (String(topic) == "coffeegrinder/cmd/start_left")
+    {
+        extern bool webStart;
+        extern void startGrinding(bool);
+        setPreset(LEFT);
+        webStart = true;
+        startGrinding(true);
+    }
+    else if (String(topic) == "coffeegrinder/cmd/calibrate")
+    {
+        extern void calibrateScale();
+        calibrateScale();
+    }
+    else if (String(topic) == "coffeegrinder/cmd/tare_scale")
+    {
+        extern void tareScale();
+        tareScale();
+    }
+    else if (String(topic) == "coffeegrinder/cmd/left")
+    {
+        setPreset(LEFT);
+        LOGF("[SET PRESET] %s\n", "LEFT");
+    }
+    else if (String(topic) == "coffeegrinder/cmd/right")
+    {
+        setPreset(RIGHT);
+        LOGF("[SET PRESET] %s\n", "RIGHT");
+    }
+}
+
+void reconnect()
+{
+    while (!mqttClient.connected())
+    {
+        if (mqttClient.connect("CoffeeGrinder", mqtt_user, mqtt_pass, "coffeegrinder/status", 1, true, "offline"))
+        {
+            // Publish online status after successful connection
+            mqttClient.publish("coffeegrinder/status", "online", true);
+            mqttClient.subscribe("coffeegrinder/#");
+
+            publishConfigsForHA();
+        }
+        else
+        {
+            delay(5000);
+        }
+    }
+}
+
+// Hilfsfunktion: device-Block ergänzen
+void addDeviceBlock(JsonObject& device) {
+  device["identifiers"][0] = "coffeegrinder_esp32";
+  device["manufacturer"] = "Danny Smolinsky";
+  device["model"] = "CoffeeGrinder";
+  device["name"] = "CoffeeGrinder";
+  device["sw_version"] = "1.1";
+}
+
+// Hilfsfunktion: publish JSON Payload
+void publishConfig(const char* topic, std::function<void(JsonDocument&)> buildPayload) {
+    JsonDocument doc;
+    buildPayload(doc);
+
+    doc.shrinkToFit();
+
+    char payload[512];
+    serializeJson(doc, payload);
+    LOGF("[TOPIC] %s\n", topic);
+    LOGF("[PAYLOAD] %s\n", payload);
+    bool result = mqttClient.publish(topic, payload, true);
+    LOGF("[MQTT] Connected: %s\n", mqttClient.connected() ? "YES" : "NO");
+    LOGF("[MQTT] Publish result: %s\n", result ? "OK" : "FAILED");
+}
+
+void setupMqtt() {
+    prefs.begin("mqtt", true);
+    String server = prefs.getString("server", "");
+    uint16_t port = prefs.getUInt("port", 0);
+    String user = prefs.getString("user", "");
+    String pass = prefs.getString("pass", "");
+    prefs.end();
+
+    if (server.isEmpty() || port == 0) {
+        LOGF("[MQTT] No valid MQTT config found. Skipping setup.\nServer: %s\nPort: %d\nUser: %s\nPassword: %s", server, port, user, pass);
+        return;
+    }
+
+    mqttClient.setServer(server.c_str(), port);
+    mqttClient.setCallback(callback);
+    mqtt_user = user.c_str();
+    mqtt_pass = pass.c_str();
+
+    reconnect();
+}
+
+void publishConfigsForHA() {
+    // MQTT Status (optional, for Home Assistant reference)
+    publishConfig("homeassistant/sensor/coffeegrinder/status/config", [](JsonDocument& doc) {
+        doc["name"] = "MQTT Status";
+        doc["unique_id"] = "coffeegrinder_status";
+        doc["state_topic"] = "coffeegrinder/status";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // CoffeeGrinder Weight
+    publishConfig("homeassistant/sensor/coffeegrinder/weight/config", [](JsonDocument& doc) {
+        doc["name"] = "Current Weight";
+        doc["unique_id"] = "coffeegrinder_current_weight";
+        doc["state_topic"] = "coffeegrinder/current_weight";
+        doc["unit_of_measurement"] = "g";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Preset Left
+    publishConfig("homeassistant/number/coffeegrinder/preset_left/config", [](JsonDocument& doc) {
+        doc["name"] = "Coffee Small";
+        doc["unique_id"] = "coffeegrinder_preset_left";
+        doc["command_topic"] = "coffeegrinder/preset_left/set";
+        doc["state_topic"] = "coffeegrinder/preset_left";
+        doc["step"] = 0.1;
+        doc["min"] = 0.1;
+        doc["max"] = 30;
+        doc["unit_of_measurement"] = "g";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Preset Right
+    publishConfig("homeassistant/number/coffeegrinder/preset_right/config", [](JsonDocument& doc) {
+        doc["name"] = "Coffee Large";
+        doc["unique_id"] = "coffeegrinder_preset_right";
+        doc["command_topic"] = "coffeegrinder/preset_right/set";
+        doc["state_topic"] = "coffeegrinder/preset_right";
+        doc["step"] = 0.1;
+        doc["min"] = 0.1;
+        doc["max"] = 30;
+        doc["unit_of_measurement"] = "g";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Selected Preset
+    publishConfig("homeassistant/sensor/coffeegrinder/selected_preset/config", [](JsonDocument& doc) {
+        doc["name"] = "Selected Preset";
+        doc["unique_id"] = "coffeegrinder_selected_preset";
+        doc["state_topic"] = "coffeegrinder/selected_preset";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Current State
+    publishConfig("homeassistant/sensor/coffeegrinder/current_state/config", [](JsonDocument& doc) {
+        doc["name"] = "Current State";
+        doc["unique_id"] = "coffeegrinder_current_state";
+        doc["state_topic"] = "coffeegrinder/current_state";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Block Threshold
+    publishConfig("homeassistant/number/coffeegrinder/block_threshold/config", [](JsonDocument& doc) {
+        doc["name"] = "Block Threshold";
+        doc["unique_id"] = "coffeegrinder_block_threshold";
+        doc["command_topic"] = "coffeegrinder/block_threshold/set";
+        doc["state_topic"] = "coffeegrinder/block_threshold";
+        doc["step"] = 0.01;
+        doc["unit_of_measurement"] = "g";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Scale Factor
+    publishConfig("homeassistant/sensor/coffeegrinder/scale_factor/config", [](JsonDocument& doc) {
+        doc["name"] = "Scale Factor";
+        doc["unique_id"] = "coffeegrinder_scale_factor";
+        doc["state_topic"] = "coffeegrinder/scale_factor";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Presets Runs Counter
+    publishConfig("homeassistant/sensor/coffeegrinder/presets_left_runs/config", [](JsonDocument& doc) {
+        doc["name"] = "Small Count";
+        doc["unique_id"] = "coffeegrinder_presets_left_runs";
+        doc["state_topic"] = "coffeegrinder/presets_left_runs";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    publishConfig("homeassistant/sensor/coffeegrinder/presets_right_runs/config", [](JsonDocument& doc) {
+        doc["name"] = "Large Count";
+        doc["unique_id"] = "coffeegrinder_presets_right_runs";
+        doc["state_topic"] = "coffeegrinder/presets_right_runs";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Total Weight Counter
+    publishConfig("homeassistant/sensor/coffeegrinder/total_weight/config", [](JsonDocument& doc) {
+        doc["name"] = "Total Weight";
+        doc["unique_id"] = "coffeegrinder_total_weight";
+        doc["state_topic"] = "coffeegrinder/total_weight";
+        doc["unit_of_measurement"] = "g";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Start
+    publishConfig("homeassistant/button/coffeegrinder/start/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Start";
+        doc["unique_id"] = "coffeegrinder_cmd_start";
+        doc["command_topic"] = "coffeegrinder/cmd/start";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Start Left
+    publishConfig("homeassistant/button/coffeegrinder/start_left/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Start Small";
+        doc["unique_id"] = "coffeegrinder_cmd_start_left";
+        doc["command_topic"] = "coffeegrinder/cmd/start_left";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Start Right
+    publishConfig("homeassistant/button/coffeegrinder/start_right/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Start Large";
+        doc["unique_id"] = "coffeegrinder_cmd_start_right";
+        doc["command_topic"] = "coffeegrinder/cmd/start_right";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Calibrate
+    publishConfig("homeassistant/button/coffeegrinder/calibrate/config", [](JsonDocument& doc) {
+        doc["name"] = "Calibrate";
+        doc["unique_id"] = "coffeegrinder_cmd_calibrate";
+        doc["command_topic"] = "coffeegrinder/cmd/calibrate";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Tare scale
+    publishConfig("homeassistant/button/coffeegrinder/tare_scale/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Tare Scale";
+        doc["unique_id"] = "coffeegrinder_cmd_tare_scale";
+        doc["command_topic"] = "coffeegrinder/cmd/tare_scale";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Preset Left
+    publishConfig("homeassistant/button/coffeegrinder/left/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Small";
+        doc["unique_id"] = "coffeegrinder_cmd_press_left";
+        doc["command_topic"] = "coffeegrinder/cmd/left";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Preset Right
+    publishConfig("homeassistant/button/coffeegrinder/right/config", [](JsonDocument& doc) {
+        doc["name"] = "Press Large";
+        doc["unique_id"] = "coffeegrinder_cmd_press_right";
+        doc["command_topic"] = "coffeegrinder/cmd/right";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+}
+
+void loopMqtt()
+{
+    if (!mqttClient.connected())
+    {
+        reconnect();
+    }
+    mqttClient.loop();
+}
+
+void mqttPublishState()
+{
+    static float lastWeight = -1;
+    static uint16_t lastPresetLeft = 0;
+    static uint16_t lastPresetRight = 0;
+    static float lastBlockThreshold = -1;
+    static float lastScaleFactor = 0.0f;
+    static unsigned long lastPresetsLeftRun = -1;
+    static unsigned long lastPresetsRightRun = -1;
+    static float lastTotalWeight = -1;
+    static PresetSelection lastSelectedPreset = LEFT;
+    static State lastState = UNKNOWN;
+
+    if (roundf(weight * 10.0f) != roundf(lastWeight * 10.0f)) {
+        mqttClient.publish("coffeegrinder/current_weight", String(weight, 1).c_str(), true);
+        lastWeight = weight;
+    }
+
+    if (presetLeft != lastPresetLeft) {
+        mqttClient.publish("coffeegrinder/preset_left", String(presetLeft / 10.0f, 1).c_str(), true);
+        lastPresetLeft = presetLeft;
+    }
+
+    if (presetRight != lastPresetRight) {
+        mqttClient.publish("coffeegrinder/preset_right", String(presetRight / 10.0f, 1).c_str(), true);
+        lastPresetRight = presetRight;
+    }
+
+    if (blockThreshold != lastBlockThreshold) {
+        mqttClient.publish("coffeegrinder/block_threshold", String(blockThreshold, 2).c_str(), true);
+        lastBlockThreshold = blockThreshold;
+    }
+
+    if (scaleFactor != lastScaleFactor) {
+        mqttClient.publish("coffeegrinder/scale_factor", String(scaleFactor, 2).c_str(), true);
+        lastScaleFactor = scaleFactor;
+    }
+
+    if (presetsLeftRun != lastPresetsLeftRun) {
+        mqttClient.publish("coffeegrinder/presets_left_runs", String(presetsLeftRun).c_str(), true);
+        lastPresetsLeftRun = presetsLeftRun;
+    }
+
+    if (presetsRightRun != lastPresetsRightRun) {
+        mqttClient.publish("coffeegrinder/presets_right_runs", String(presetsRightRun).c_str(), true);
+        lastPresetsRightRun = presetsRightRun;
+    }
+
+    if (totalWeight != lastTotalWeight) {
+        mqttClient.publish("coffeegrinder/total_weight", String(totalWeight, 1).c_str(), true);
+        lastTotalWeight = totalWeight;
+    }
+
+    if (selectedPreset != lastSelectedPreset) {
+        const char* preset = selectedPreset == LEFT ? "LEFT" : "RIGHT";
+        float timeValue = (selectedPreset == LEFT ? presetLeft : presetRight) / 10.0f;
+        String message = String(preset) + " (" + String(timeValue, 1) + "s)";
+        mqttClient.publish("coffeegrinder/selected_preset", message.c_str(), true);
+        lastSelectedPreset = selectedPreset;
+    }
+
+    if (state != lastState) {
+        mqttClient.publish("coffeegrinder/current_state", stateToString(state).c_str(), true);
+        lastState = state;
+    }
+}

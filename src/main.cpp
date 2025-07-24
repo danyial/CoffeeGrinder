@@ -5,152 +5,197 @@
 #include <Preferences.h>
 #include <AccelStepper.h>
 #include <Bounce2.h>
+#include "HX711.h"
+#include <esp_wifi.h>
+#include <WebServer.h>
+#include "mqtt.h"
+#include "ota.h"
+#include "pins.h"
+#include "types.h"
+#include "webserver.h"
 
-// Pins für Stepper
-#define PIN_STEP 19
-#define PIN_DIR 18
-#define PIN_ENABLE 14 // Enable-Pin für Treiber (LOW = enabled)
-
-// Enum oder Konstanten für die Preset-Seite
-#define LEFT true
-#define RIGHT false
+// Reset pin for OLED (or -1 if sharing Arduino reset pin)
+#define OLED_RESET -1
+// I2C address for OLED display (128x32)
+#define SCREEN_ADDRESS 0x3C
 
 Bounce2::Button btnStart, btnL, btnR;
 
-// Pins für Taster
-#define BTN_L 4     // Preset links auswählen
-#define BTN_R 0     // Preset rechts auswählen
-#define BTN_START 2 // Start-Schalter
-
-#define OLED_RESET -1       // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C // 0x3C für 128x32
-
-// Display-Objekt erstellen
+// Display object for OLED
 Adafruit_SSD1306 display(128, 32, &Wire, OLED_RESET);
 
-// Stepper-Objekt (Driver-Modus)
+// Stepper object (driver mode)
 AccelStepper stepper(AccelStepper::DRIVER, PIN_STEP, PIN_DIR);
 
-// Zustände
-enum State
-{
-    IDLE,
-    RUNNING,
-    PAUSED,
-    FINISHED,
-    SAVING,
-    SET_LEFT,
-    SET_RIGHT
-};
+// HX711 object
+HX711 scale;
 
-static volatile State state = IDLE;
+constexpr float MAX_STEPPER_SPEED = 6000.0;
+constexpr float STEPPER_ACCELERATION = 400.0;
+constexpr float STEPPER_RUN_SPEED = 5000.0;
+constexpr unsigned long LOOP_INTERVAL_MS = 100;
+constexpr unsigned long DISPLAY_REFRESH_MS = 50;
+constexpr unsigned long SCALE_INTERVAL_MS = 500;
+constexpr unsigned long DEBOUNCE_DELAY = 50;
+// Maximum preset time in 0.1s units (60.0s)
+constexpr uint16_t MAX_PRESET_WEIGHT = 300;
+// Minimum preset time in 0.1s units (0.1s)
+constexpr uint16_t MIN_PRESET_WEIGHT = 1;
 
-// Debounce-Einstellungen
-const unsigned long DEBOUNCE_DELAY = 50; // ms
+volatile State state = IDLE;
+static float speed = STEPPER_RUN_SPEED;
 
-// Presets in 0,1-s-Schritten und gewünschte Geschwindigkeiten
-static uint16_t presetLeft = 120 * 10;   //  8.0 s
-static uint16_t presetRight = 180 * 10; // 12.0 s
+// Presets in 0.1 second steps
+uint16_t presetLeft = 120 * 10;
+uint16_t presetRight = 180 * 10;
 
-// Speed in Steps/Second
-static float speed = 9000.0;
+// Currently selected preset
+PresetSelection selectedPreset = LEFT;
 
-// Laufzeit-Variablen
-uint16_t remaining;       // verbleibende 0,1 s
-unsigned long lastMillis; // für run-/pause-Timing
-
-// Longpress-Erkennung
-const unsigned long LONGPRESS_MS = 800;
-
-// Welches Preset ist aktiv?
-bool selectedPreset = LEFT;
-
-// Preferences für NVS-Flash
+// Preferences for NVS flash
 Preferences prefs;
 
-// Task-Prototypen
-void displayTask(void *pvParameters);
-void stepperTask(void *pvParameters);
+// Default calibration factor. Calibration is mandatory!
+float scaleFactor = 1.0;
 
-void setupStepper();
-void setRemainingTime();
-void startGrinding();
-void enterSetting(bool isLeft);
+// Remaining time in 0.1s units
+uint16_t remaining;
+// Timestamp for run/pause timing
+unsigned long lastMillis;
+unsigned long lastScaleMillis = 0;
+
+float weight = 0.0;
+float lastWeight = 0.0;
+unsigned long lastWeightChangeTime = 0;
+
+uint8_t reverseAttempts = 0;
+
+float blockThreshold = 0.07f;  // Initialwert für Blockiererkennungsschwelle (in Gramm)
+unsigned long presetsLeftRun = 0;  // Anzahl durchgelaufener Presets
+unsigned long presetsRightRun = 0;  // Anzahl durchgelaufener Presets
+float totalWeight = 0.0f;      // Gesamtgewicht des gemahlenen Kaffees
+
+// Long press threshold in milliseconds
+const unsigned long LONGPRESS_MS = 3000;
+
+bool webStart = false;
+
+void displayTask(void *pvParameters);
+void scaleTask(void *pvParameters);
+void mqttTask(void *pvParameters);
+
 void adjustSetting(State s, int8_t delta);
-void handleButton(Bounce2::Button button, bool isLeft);
-void saveSetting(State s);
+void calibrateScale();
 void drawDisplay();
-void displayTask(void *pvParameters);
-void stepperTask(void *pvParameters);
+void enterSetting(PresetSelection selection);
+void handleButton(Bounce2::Button button, PresetSelection selection);
+void handleStartButton(Bounce2::Button button);
+void loadPreferences();
+void logState();
+void savePreferences();
+void setPreset(PresetSelection selection);
+void setRemainingTime();
+void setSelectedPreset(PresetSelection selection);
+void setState(State s);
+void setupButtons();
+void setupStepper();
+void startGrinding(bool tareScale);
+void tareScale();
 
+void calibrateScale()
+{
+    setState(CALIBRATE);
+
+    Serial.println("== SCALE CALIBRATION ==");
+    Serial.println("Remove all weight. Taring...");
+    scale.tare();
+    Serial.println("Place known weight (e.g. 100g) and press Start button.");
+}
+
+// Initialize serial, display, buttons, preferences and create display task
 void setup()
 {
     Serial.begin(115200);
 
-    // Display
+    startWifi();
+
+    setupOTA();
+
+    setupMqtt();
+    publishConfigsForHA();
+
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
     {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;)
-            ;
+        for (;;);
     }
     display.clearDisplay();
 
-    // Buttons
-    btnStart.attach(BTN_START, INPUT_PULLUP);
-    btnStart.interval(DEBOUNCE_DELAY);
-    btnStart.setPressedState(LOW);
-    btnR.attach(BTN_R, INPUT_PULLUP);
-    btnR.interval(DEBOUNCE_DELAY);
-    btnR.setPressedState(LOW);
-    btnL.attach(BTN_L, INPUT_PULLUP);
-    btnL.interval(DEBOUNCE_DELAY);
-    btnL.setPressedState(LOW);
-
-    // Load saved preferences
-    prefs.begin("coffee", false);
-    if (!prefs.isKey("pL"))
-        prefs.putUShort("pL", presetLeft);
-    if (!prefs.isKey("pR"))
-        prefs.putUShort("pR", presetRight);
-    presetLeft = prefs.getUShort("pL", presetLeft);
-    presetRight = prefs.getUShort("pR", presetRight);
-
-    if (prefs.isKey("sel"))
-        selectedPreset = prefs.getUInt("sel", selectedPreset);
-    else
-        prefs.putUInt("sel", selectedPreset);
-
+    setupButtons();
+    loadPreferences();
     setRemainingTime();
-
-    // Stepper
     setupStepper();
 
-    // Display-Task auf Core 1
-    //xTaskCreatePinnedToCore(displayTask, "DisplayTask", 2048, NULL, 1, NULL, 1);
-    // Stepper-Task auf Core 0
-    //xTaskCreatePinnedToCore(stepperTask, "StepperTask", 2048, NULL, 2, NULL, 0);
+    scale.begin(HX_DT, HX_SCK);
+    scale.set_scale(scaleFactor); // Calibration factor to be determined
+    scale.tare();      // Reset scale to 0
+
+    logState();
+
+    xTaskCreatePinnedToCore(displayTask, "DisplayTask", 2048, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(scaleTask, "ScaleTask", 2048, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(mqttTask, "MqttTask", 2048, NULL, 1, NULL, 1);
 }
 
-void loop()
+// Configure button pins and debounce settings
+void setupButtons()
 {
-    unsigned long now = millis();
+    btnStart.attach(BTN_START, INPUT);
+    btnStart.interval(DEBOUNCE_DELAY);
+    btnStart.setPressedState(HIGH);
+    btnR.attach(BTN_R, INPUT);
+    btnR.interval(DEBOUNCE_DELAY);
+    btnR.setPressedState(HIGH);
+    btnL.attach(BTN_L, INPUT);
+    btnL.interval(DEBOUNCE_DELAY);
+    btnL.setPressedState(HIGH);
+}
+
+// Configure stepper motor parameters and enable pin
+void setupStepper()
+{
+    pinMode(PIN_ENABLE, OUTPUT);
+    digitalWrite(PIN_ENABLE, HIGH);
+    stepper.setMaxSpeed(MAX_STEPPER_SPEED);
+    stepper.setAcceleration(STEPPER_ACCELERATION);
+    stepper.setSpeed(speed);
+}
+
+// Main loop handling state machine and button updates
+void loop()
+{   
+    ArduinoOTA.handle(); 
+
+    unsigned long now = millis();    
 
     btnStart.update();
     btnL.update();
     btnR.update();
 
+    if (now - lastScaleMillis >= SCALE_INTERVAL_MS && state != CALIBRATE) {
+        lastScaleMillis += SCALE_INTERVAL_MS;
+        // LOGF("[SCALE - loop] %.2f g\n", weight);
+    }
+
     switch (state)
     {
     case IDLE:
-        digitalWrite(PIN_ENABLE, HIGH);
-
-        // Start Grinding
-        if (btnStart.fell())
+        if (digitalRead(PIN_ENABLE) == LOW)
         {
-            startGrinding();
+            digitalWrite(PIN_ENABLE, HIGH);
         }
 
+        handleStartButton(btnStart);
         handleButton(btnL, LEFT);
         handleButton(btnR, RIGHT);
 
@@ -161,56 +206,88 @@ void loop()
             digitalWrite(PIN_ENABLE, LOW);
         }
 
-        if (now - lastMillis >= 100)
-        {
-            lastMillis += 100;
-            remaining--;
-            if (remaining == 0)
-            {
-                state = FINISHED;
+        // Check for weight change
+        if (fabs(weight - lastWeight) > blockThreshold) {  // Schwelle: 0.1 g
+            lastWeight = weight;
+            lastWeightChangeTime = now;
+            reverseAttempts = 0;
+        }
+
+        if (stepper.speed() > 0 && now - lastWeightChangeTime >= 3000) {
+            if (reverseAttempts < 3) {
+                stepper.setSpeed(-speed);
+                lastWeightChangeTime = now;
+                reverseAttempts++;
+            } else {
+                LOGF("[BLOCKED] Max reverse attempts (%dx) reached!\n", reverseAttempts);
+                reverseAttempts = 0;
+                setState(EMPTY);
             }
+        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 500) {
+            stepper.setSpeed(speed);
+            lastWeightChangeTime = now;
         }
 
         stepper.runSpeed();
 
-        if (btnStart.fell())
+        if (weight * 10 >= remaining) {
+            setState(MEASURING);
+        }
+
+        if (webStart)
         {
-            state = PAUSED;
+            webStart = false;  // Skip first check after Web-Start
+        }
+        else if (btnStart.fell())
+        {
+            setState(PAUSED);
         }
 
         break;
+    case MEASURING:
+        if (weight * 10 >= remaining) {
+            setState(FINISHED);
+        } else {
+            startGrinding(false);
+        }
+        break;
+    case EMPTY:
     case PAUSED:
         if (btnStart.fell())
         {
-            startGrinding();
+            startGrinding(false);
         }
 
         if (btnL.fell())
         {
-            selectedPreset = LEFT;
-            prefs.putUInt("sel", selectedPreset);
+            setSelectedPreset(LEFT);
+            savePreferences();
             setRemainingTime();
-            state = IDLE;
+            setState(IDLE);
         }
 
         if (btnR.fell())
         {
-            selectedPreset = RIGHT;
-            prefs.putUInt("sel", selectedPreset);
+            setSelectedPreset(RIGHT);
+            savePreferences();
             setRemainingTime();
-            state = IDLE;
+            setState(IDLE);
         }
         break;
     case FINISHED:
-        setRemainingTime();
-        state = IDLE;
+        if (selectedPreset == LEFT)
+            presetsLeftRun++;
+        else {
+            presetsRightRun++;
+        }
+        totalWeight += weight;
+        setState(SAVING);
         break;
     case SAVING:
-        saveSetting(state);
-        prefs.putUInt("sel", selectedPreset);
+        savePreferences();
         setRemainingTime();
         delay(2000);
-        state = IDLE;
+        setState(IDLE);
         break;
     case SET_LEFT:
     case SET_RIGHT:
@@ -226,55 +303,134 @@ void loop()
 
         if (btnStart.fell())
         {
-            state = SAVING;
+            setState(SAVING);
+        }
+        break;
+    case CALIBRATE:
+        if (btnStart.fell())
+        {
+            // scale.tare();
+
+            long reading = scale.get_value(10);
+            Serial.print("Raw reading: ");
+            Serial.println(reading);
+
+            float known_weight = 10.92;
+            float factor = (float)reading / known_weight;
+
+            Serial.print("Calibration factor set: ");
+            Serial.println(factor, 2);
+
+            scaleFactor = factor;
+            scale.set_scale(scaleFactor);
+            
+            setState(SAVING);
         }
         break;
     }
 }
 
-void setupStepper()
-{
-    pinMode(PIN_ENABLE, OUTPUT);
-    digitalWrite(PIN_ENABLE, HIGH);
-    stepper.setMaxSpeed(20000);
-    stepper.setAcceleration(400.0);
-    stepper.setSpeed(speed);
-}
-
+// Set remaining time based on selected preset
 void setRemainingTime()
 {
-    remaining = selectedPreset ? presetLeft : presetRight;
+    LOGF("[REMAINING] %d / %d g\n", presetLeft, presetRight);
+    remaining = (selectedPreset == LEFT) ? presetLeft : presetRight;
 }
 
-void startGrinding()
+void setPreset(PresetSelection selection) {
+    setSelectedPreset(selection);
+    savePreferences();
+    setRemainingTime();
+    setState(IDLE);
+    scale.tare();
+}
+
+// Setter for selectedPreset variable with automatic logging
+void setSelectedPreset(PresetSelection selection)
 {
+    selectedPreset = selection;
+}
+
+// Setter for state variable with automatic logging
+void setState(State s)
+{
+    state = s;
+    logState();
+}
+
+void tareScale() {
+    scale.tare();
+}
+
+// Start grinding: reset timer, tare scale if state is IDLE and change state to RUNNING
+void startGrinding(bool tareScale)
+{
+    if (state == IDLE && tareScale == true) {
+        scale.tare();
+    }
+
     lastMillis = millis();
-    state = RUNNING;
+    setRemainingTime();
+    setState(RUNNING);
 }
 
-void enterSetting(bool isLeft)
+// Enter setting mode for selected preset
+void enterSetting(PresetSelection selection)
 {
-    state = isLeft ? SET_LEFT : SET_RIGHT;
+    setState(selection == LEFT ? SET_LEFT : SET_RIGHT);
 }
 
+// Adjust preset time in setting mode
 void adjustSetting(State s, int8_t delta)
 {
     if (s == SET_LEFT)
         presetLeft += delta;
     else
         presetRight += delta;
-    presetLeft = constrain(presetLeft, 1, 600);
-    presetRight = constrain(presetRight, 1, 600);
+    presetLeft = constrain(presetLeft, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
+    presetRight = constrain(presetRight, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
 }
 
-void handleButton(Bounce2::Button button, bool isLeft)
+// Handle button press for short and long press actions
+void handleStartButton(Bounce2::Button button)
+{
+    // Long Press
+    // if (button.isPressed())
+    // {
+    //     if (button.currentDuration() >= LONGPRESS_MS)
+    //     {
+    //         if (state == IDLE) {
+    //             setState(WEIGHING);
+    //             tareScale();
+    //         } else if (state == WEIGHING) {
+    //             setState(IDLE);
+    //         }
+    //     }
+    // }
+
+    // Short Press
+    if (button.pressed())
+    {
+        if (button.currentDuration() < LONGPRESS_MS)
+        {
+            if (state == IDLE) {
+                startGrinding(true);
+            } else if (state == WEIGHING) {
+                tareScale();
+            }
+        }
+    }
+}
+
+void handleButton(Bounce2::Button button, PresetSelection selection)
 {
     // Long Press
     if (button.isPressed())
     {
         if (button.currentDuration() >= LONGPRESS_MS)
         {
-            enterSetting(isLeft);
+            enterSetting(selection);
+            logState();
         }
     }
 
@@ -283,19 +439,55 @@ void handleButton(Bounce2::Button button, bool isLeft)
     {
         if (button.currentDuration() < LONGPRESS_MS)
         {
-            selectedPreset = isLeft;
-            prefs.putUInt("sel", selectedPreset);
-            setRemainingTime();
+            setPreset(selection);
         }
     }
 }
 
-void saveSetting(State s)
+// Load presets and selected preset from non-volatile storage
+void loadPreferences()
 {
-    prefs.putUShort("pL", presetLeft);
-    prefs.putUShort("pR", presetRight);
+    prefs.begin("coffee", false);
+
+    presetLeft = prefs.getUShort("pL", 120 * 10);
+    presetRight = prefs.getUShort("pR", 180 * 10);
+
+    LOGF("[PREFERENCES] %d / %d g\n", presetLeft, presetRight);
+
+    uint32_t sel = prefs.getUInt("sel", static_cast<uint32_t>(selectedPreset));
+    selectedPreset = (sel <= RIGHT) ? static_cast<PresetSelection>(sel) : LEFT;
+
+    scaleFactor = prefs.getFloat("scale", 1.0);
+    scale.set_scale(scaleFactor);
+
+    totalWeight = prefs.getFloat("totalWeight", 0.0);
+    presetsLeftRun = prefs.getULong("presetsLeftRun", 0);
+    presetsRightRun = prefs.getULong("presetsRightRun", 2);
+
+    prefs.end();
 }
 
+// Save presets and selected preset to non-volatile storage
+void savePreferences()
+{
+    prefs.begin("coffee", false);
+
+    prefs.putUShort("pL", presetLeft);
+    prefs.putUShort("pR", presetRight);
+    prefs.putUInt("sel", static_cast<uint32_t>(selectedPreset));
+    prefs.putFloat("scale", scaleFactor);
+    prefs.putFloat("totalWeight", totalWeight);
+    prefs.putULong("presetsLeftRun", presetsLeftRun);
+    prefs.putULong("presetsRightRun", presetsRightRun);
+
+    prefs.end();
+
+    setSelectedPreset(selectedPreset);
+    setRemainingTime();
+    drawDisplay();
+}
+
+// Update OLED display based on current state
 void drawDisplay()
 {
     display.clearDisplay();
@@ -303,25 +495,39 @@ void drawDisplay()
     switch (state)
     {
     case IDLE:
-        sprintf(buf, "%s %4.1fs", selectedPreset ? "Kl." : "Gr.", remaining / 10.0);
+        sprintf(buf, "%4.1fg", (selectedPreset == LEFT ? presetLeft : presetRight) / 10.0);
         break;
+    case WEIGHING:
     case RUNNING:
-        sprintf(buf, "%4.1fs", remaining / 10.0);
+        // float weight = scale.get_units();
+        sprintf(buf, "%4.1fg", weight);
         break;
     case PAUSED:
-        sprintf(buf, "%4.1fs", remaining / 10.0);
+        sprintf(buf, "%4.1fg", remaining / 10.0);
+        break;
+    case MEASURING:
+        sprintf(buf, "Warte...");
         break;
     case FINISHED:
         sprintf(buf, "Fertig!");
         break;
     case SAVING:
-        sprintf(buf, "Zeit gespeichert!");
+        sprintf(buf, "Gespeichert!");
         break;
     case SET_LEFT:
-        sprintf(buf, "Setze Kl.: %4.1fs", presetLeft / 10.0);
+        sprintf(buf, "Setze Kl.: %4.1f%s", presetLeft / 10.0, "g");
         break;
     case SET_RIGHT:
-        sprintf(buf, "Setze Gr.: %4.1fs", presetRight / 10.0);
+        sprintf(buf, "Setze Gr.: %4.1f%s", presetRight / 10.0, "g");
+        break;
+    case CALIBRATE:
+        sprintf(buf, "Kalibrierung");
+        break;
+    case EMPTY:
+        sprintf(buf, "Bohnen\nleer?");
+        break;
+    case UPDATING:
+        sprintf(buf, "Update...");
         break;
     }
     int16_t x1, y1;
@@ -336,25 +542,64 @@ void drawDisplay()
     display.display();
 }
 
+// Convert state enum to human-readable string
+String stateToString(State s)
+{
+    switch (s)
+    {
+    case IDLE: return "IDLE";
+    case RUNNING: return "RUNNING";
+    case PAUSED: return "PAUSED";
+    case MEASURING: return "MEASURING";
+    case FINISHED: return "FINISHED";
+    case SAVING: return "SAVING";
+    case SET_LEFT: return "SET_LEFT";
+    case SET_RIGHT: return "SET_RIGHT";
+    case CALIBRATE: return "CALIBRATE";
+    case UPDATING: return "UDATING";
+    case EMPTY: return "EMPTY";
+    case WEIGHING: return "WEIGHING";
+    default: return "UNKNOWN";
+    }
+}
+
+// Log current state, preset and remaining time via Serial
+void logState()
+{
+    LOGF("[STATE] %s\n", stateToString(state));
+    LOGF("[PRESET] %s\n", (selectedPreset == LEFT) ? "LEFT" : "RIGHT");
+    LOGF("[REMAINING] %.1fs\n", remaining / 10.0);
+}
+
+// FreeRTOS task to refresh the display periodically
 void displayTask(void *pvParameters)
 {
     (void)pvParameters;
     while (true)
     {
         drawDisplay();
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(DISPLAY_REFRESH_MS));
     }
 }
 
-void stepperTask(void *pvParameters)
+void scaleTask(void *pvParameters)
 {
     (void)pvParameters;
-    for (;;)
+    while (true)
     {
-        if (state == RUNNING)
-            stepper.setSpeed(speed);
-            stepper.runSpeed();
-        // Minimal yield, sonst blockiert
-        vTaskDelay(pdMS_TO_TICKS(1));
+        weight = scale.get_units();
+        // LOGF("[SCALE - Task] %.2f g\n", weight);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+
+void mqttTask(void *pvParameters)
+{
+    (void)pvParameters;
+    while (true)
+    {
+        loopMqtt();
+        mqttPublishState();
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

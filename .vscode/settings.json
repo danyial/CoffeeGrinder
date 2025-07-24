@@ -1,0 +1,6 @@
+{
+    "idf.port": "/dev/tty.usbserial-0001",
+    "files.associations": {
+        "stop_token": "cpp"
+    }
+}

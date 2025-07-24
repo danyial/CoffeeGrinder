@@ -18,6 +18,20 @@ Includes 3D-printable housing, custom PCB (KiCad), and open-source firmware for 
 - 📦 STL files for 3D-printed case
 - 🔌 KiCad schematics and PCB
 
+## 🖼️ Images
+
+<p align="center">
+  <img src="hardware/images/CoffeeGrinder.png" alt="CoffeeGrinder" width="500"/>
+  <br/>
+  <em>CoffeeGrinder assembled</em>
+</p>
+
+<p align="center">
+  <img src="hardware/images/CoffeeGrinder_sliced.png" alt="CoffeeGrinder Sliced" width="500"/>
+  <br/>
+  <em>Section view (sliced)</em>
+</p>
+
 ---
 
 ## 📁 Project Structure

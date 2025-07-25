@@ -5,4 +5,6 @@
 .vscode/ipch
 diagram.json
 wokwi.toml
+dist
 hardware/kicad/CoffeeGrinder/CoffeeGrinder-backups/*
+hardware/kicad/CoffeeGrinder/production/backups/*

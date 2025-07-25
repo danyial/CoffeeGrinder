@@ -138,7 +138,7 @@ void addDeviceBlock(JsonObject& device) {
   device["manufacturer"] = "Danny Smolinsky";
   device["model"] = "CoffeeGrinder";
   device["name"] = "CoffeeGrinder";
-  device["sw_version"] = "0.1";
+  device["sw_version"] = "0.0.1";
 }
 
 // Hilfsfunktion: publish JSON Payload

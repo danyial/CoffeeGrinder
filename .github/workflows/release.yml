@@ -1,0 +1,62 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger bei jedem Tag wie v1.0.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Set up PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Install platformIO libraries
+        run: pio lib install
+        
+      - name: Build firmware
+        run: platformio run
+
+      - name: Create Gerber zip
+        run: |
+          mkdir -p dist
+          zip -j dist/Gerber.zip hardware/kicad/CoffeeGrinder/production/*.csv hardware/kicad/CoffeeGrinder/production/*.zip hardware/kicad/CoffeeGrinder/production/*.ipc
+
+      - name: Create STL zip
+        run: |
+          mkdir -p dist
+          zip -j dist/STL.zip hardware/stl/**/*.stl
+
+      - name: Delete older releases (keep last 2)
+        uses: dev-drprasad/delete-older-releases@v0.3.3
+        with:
+          keep_latest: 2
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload firmware and STLs
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            Automated release for version ${{ github.ref_name }}
+          files: |
+            .pio/build/*/*.bin
+            dist/STL.zip
+            dist/Gerber.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

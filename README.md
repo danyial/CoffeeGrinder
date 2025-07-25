@@ -87,8 +87,10 @@ CoffeeGrinder/
 - Elko [🛒 Amazon](https://amzn.to/3Uhur6B)
 - DC Connector [🛒 Amazon](https://amzn.to/4f7ja2e)
 - some cables
-- some M3 screws
-- some M3 nuts
+- some M3 screws [🛒 Amazon](https://amzn.to/44Lvy4o)
+- some M3 nuts [🛒 Amazon](https://amzn.to/4favDlR)
+- 2x M4 screws [🛒 Amazon](https://amzn.to/4lILPgh)
+- 2x M4 Threaded Inserts [🛒 Amazon](https://amzn.to/44OBxFI)
 
 ### Requirements
 

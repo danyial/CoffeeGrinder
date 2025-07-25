@@ -100,10 +100,10 @@ uint8_t reverseAttempts = 0;
 float blockThreshold = 0.07f;
 
 // Number of times the left preset was run
-unsigned long presetsSmallRuns = 0;
+unsigned long presetSmallRuns = 0;
 
 // Number of times the right preset was run
-unsigned long presetsLargeRuns = 0;
+unsigned long presetLargeRuns = 0;
 
 // Accumulated total weight of ground coffee
 float totalWeight = 0.0f;
@@ -340,9 +340,9 @@ void loop()
         break;
     case FINISHED:
         if (selectedPreset == SMALL)
-            presetsSmallRuns++;
+            presetSmallRuns++;
         else {
-            presetsLargeRuns++;
+            presetLargeRuns++;
         }
         totalWeight += weight;
         setState(SAVING);
@@ -535,8 +535,13 @@ void loadPreferences()
     scale.set_scale(scaleFactor);
 
     totalWeight = prefs.getFloat("totalWeight", 0.0);
-    presetsSmallRuns = prefs.getULong("presetsSmallRuns", 0);
-    presetsLargeRuns = prefs.getULong("presetsLargeRuns", 2);
+    presetSmallRuns = prefs.getULong("presetSmallRuns", 0);
+    presetLargeRuns = prefs.getULong("presetLargeRuns", 0);
+
+    // presetSmallRuns = 1;
+    // presetLargeRuns = 5;
+
+    // setState(SAVING);
 
     prefs.end();
 }
@@ -551,8 +556,8 @@ void savePreferences()
     prefs.putUInt("sel", static_cast<uint32_t>(selectedPreset));
     prefs.putFloat("scale", scaleFactor);
     prefs.putFloat("totalWeight", totalWeight);
-    prefs.putULong("presetsSmallRuns", presetsSmallRuns);
-    prefs.putULong("presetsLargeRuns", presetsLargeRuns);
+    prefs.putULong("presetSmallRuns", presetSmallRuns);
+    prefs.putULong("presetLargeRuns", presetLargeRuns);
 
     prefs.end();
 

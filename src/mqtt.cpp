@@ -26,8 +26,8 @@ extern float scaleFactor;
 extern float blockThreshold;
 extern volatile State state;
 
-extern unsigned long presetsSmallRuns;
-extern unsigned long presetsLargeRuns;
+extern unsigned long presetSmallRuns;
+extern unsigned long presetLargeRuns;
 extern float totalWeight;
 
 extern PresetSelection selectedPreset;
@@ -388,12 +388,12 @@ void loopMqtt()
 void mqttPublishState()
 {
     static float lastWeight = -1;
-    static uint16_t lastPresetLeft = 0;
-    static uint16_t lastPresetRight = 0;
+    static uint16_t lastPresetSmall = 0;
+    static uint16_t lastPresetLarge = 0;
     static float lastBlockThreshold = -1;
     static float lastScaleFactor = 0.0f;
-    static unsigned long lastPresetsLeftRun = -1;
-    static unsigned long lastPresetsRightRun = -1;
+    static unsigned long lastPresetSmallRuns = -1;
+    static unsigned long lastPresetLargeRuns = -1;
     static float lastTotalWeight = -1;
     static PresetSelection lastSelectedPreset = SMALL;
     static State lastState = UNKNOWN;
@@ -403,14 +403,14 @@ void mqttPublishState()
         lastWeight = weight;
     }
 
-    if (presetSmall != lastPresetLeft) {
+    if (presetSmall != lastPresetSmall) {
         mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/preset_left").c_str(), String(presetSmall / 10.0f, 1).c_str(), true);
-        lastPresetLeft = presetSmall;
+        lastPresetSmall = presetSmall;
     }
 
-    if (presetLarge != lastPresetRight) {
+    if (presetLarge != lastPresetLarge) {
         mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/preset_right").c_str(), String(presetLarge / 10.0f, 1).c_str(), true);
-        lastPresetRight = presetLarge;
+        lastPresetLarge = presetLarge;
     }
 
     if (blockThreshold != lastBlockThreshold) {
@@ -423,14 +423,14 @@ void mqttPublishState()
         lastScaleFactor = scaleFactor;
     }
 
-    if (presetsSmallRuns != lastPresetsLeftRun) {
-        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/presets_left_runs").c_str(), String(presetsSmallRuns).c_str(), true);
-        lastPresetsLeftRun = presetsSmallRuns;
+    if (presetSmallRuns != lastPresetSmallRuns) {
+        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/presets_left_runs").c_str(), String(presetSmallRuns).c_str(), true);
+        lastPresetSmallRuns = presetSmallRuns;
     }
 
-    if (presetsLargeRuns != lastPresetsRightRun) {
-        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/presets_right_runs").c_str(), String(presetsLargeRuns).c_str(), true);
-        lastPresetsRightRun = presetsLargeRuns;
+    if (presetLargeRuns != lastPresetLargeRuns) {
+        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/presets_right_runs").c_str(), String(presetLargeRuns).c_str(), true);
+        lastPresetLargeRuns = presetLargeRuns;
     }
 
     if (totalWeight != lastTotalWeight) {

@@ -304,7 +304,7 @@ void setupWebServer() {
 
         String firmwareUrl;
         for (JsonObject asset : doc["assets"].as<JsonArray>()) {
-            if (String(asset["name"]).endsWith(".bin")) {
+            if (String(asset["name"].as<const char*>()).endsWith(".bin")) {
                 firmwareUrl = asset["browser_download_url"].as<String>();
                 break;
             }

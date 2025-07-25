@@ -41,6 +41,24 @@ Contributions, feedback, and test results are welcome!
   <em>Section view (sliced)</em>
 </p>
 
+<p align="center">
+  <img src="hardware/images/Cycloidal_Top.png" alt="Cycloidal Drive Top View" width="500"/>
+  <br/>
+  <em>Cycloidal Drive Top View</em>
+</p>
+
+<p align="center">
+  <img src="hardware/images/Cycloidal_Bottom.png" alt="Cycloidal Drive Bottom View" width="500"/>
+  <br/>
+  <em>Cycloidal Drive Bottom View</em>
+</p>
+
+<p align="center">
+  <img src="hardware/images/Cycloidal_Sliced.png" alt="Cycloidal Drive Sliced View" width="500"/>
+  <br/>
+  <em>Cycloidal Drive Sliced View</em>
+</p>
+
 ---
 
 ## 📁 Project Structure
@@ -54,7 +72,8 @@ CoffeeGrinder/
 ├── hardware/
 │   ├── stl/            # 3D-printable case parts
 │   ├── kicad/          # KiCad PCB project
-│   └── docs/           # Rendered schematics (PDF/PNG)
+│   ├── images/         # Project images
+│   └── docs/           # Rendered schematics (PDF)
 ├── docs/               # General project documentation
 ├── LICENSE.md          # License (AGPL + CC BY-NC-SA)
 └── README.md           # This file

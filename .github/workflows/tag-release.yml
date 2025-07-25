@@ -1,0 +1,34 @@
+name: Create Tag from version.h
+
+on:
+  push:
+    paths:
+      - 'include/version.h'
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from version.h
+        id: get_version
+        run: |
+          version=$(grep 'CURRENT_VERSION' include/version.h | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Version: $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          tag_exists=$(git ls-remote --tags origin refs/tags/${{ steps.get_version.outputs.version }} | wc -l)
+          echo "tag_exists=$tag_exists" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.tag_exists == '0'
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag ${{ steps.get_version.outputs.version }}
+          git push origin ${{ steps.get_version.outputs.version }}

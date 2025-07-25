@@ -1,11 +1,14 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
+#include <HTTPClient.h>
 #include <Preferences.h>
 #include <Update.h>
 #include <WiFi.h>
 #include "mqtt.h"
 #include "pins.h"
 #include "types.h"
+#include "version.h"
 #include "webserver.h"
 
 extern void calibrateScale();
@@ -273,6 +276,72 @@ void setupWebServer() {
             }
         }
     );
+
+    server.on("/autoupdate", HTTP_GET, [](AsyncWebServerRequest *request) {
+        HTTPClient http;
+        http.begin("https://api.github.com/repos/deinuser/CoffeeGrinder/releases/latest");
+        http.setUserAgent("ESP32");  // wichtig für GitHub API
+
+        int httpCode = http.GET();
+        if (httpCode != 200) {
+            request->send(500, "text/plain", "Failed to check for update.");
+            return;
+        }
+
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, http.getString());
+
+        if (error) {
+            request->send(500, "text/plain", "Failed to parse release data.");
+            return;
+        }
+
+        String latest = doc["tag_name"] | "";
+        if (latest == CURRENT_VERSION) {
+            request->send(200, "text/plain", "Already up to date.");
+            return;
+        }
+
+        String firmwareUrl;
+        for (JsonObject asset : doc["assets"].as<JsonArray>()) {
+            if (String(asset["name"]).endsWith(".bin")) {
+                firmwareUrl = asset["browser_download_url"].as<String>();
+                break;
+            }
+        }
+
+        if (firmwareUrl == "") {
+            request->send(500, "text/plain", "Firmware .bin not found.");
+            return;
+        }
+
+        http.end();
+
+        // Jetzt Firmware holen
+        http.begin(firmwareUrl);
+        int contentLength = http.GET();
+        WiFiClient *stream = http.getStreamPtr();
+
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            request->send(500, "text/plain", "Update.begin() failed.");
+            return;
+        }
+
+        size_t written = Update.writeStream(*stream);
+
+        if (!Update.end()) {
+            request->send(500, "text/plain", "Update failed: " + String(Update.errorString()));
+            return;
+        }
+
+        if (written > 0 && Update.isFinished()) {
+            request->send(200, "text/plain", "Update successful. Rebooting...");
+            delay(2000);
+            ESP.restart();
+        } else {
+            request->send(500, "text/plain", "Update failed or incomplete.");
+        }
+    });
 
     server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Restarting...");

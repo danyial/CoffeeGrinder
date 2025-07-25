@@ -1,9 +1,10 @@
 name: Create Release
 
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger bei jedem Tag wie v1.0.0
+  workflow_run:
+    workflows: ["Create Tag from version.h"]
+    types:
+      - completed
 
 jobs:
   release:

@@ -11,8 +11,8 @@
 #endif
 
 enum PresetSelection {
-    LEFT,
-    RIGHT
+    SMALL,
+    LARGE
 };
 
 enum PresetMode { 

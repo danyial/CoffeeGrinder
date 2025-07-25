@@ -24,8 +24,8 @@ extern float scaleFactor;
 extern float blockThreshold;
 extern volatile State state;
 
-extern unsigned long presetsLeftRun;
-extern unsigned long presetsRightRun;
+extern unsigned long presetsSmallRuns;
+extern unsigned long presetsLargeRuns;
 extern float totalWeight;
 
 extern PresetSelection selectedPreset;
@@ -79,7 +79,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
         extern bool webStart;
         extern void startGrinding(bool);
-        setPreset(RIGHT);
+        setPreset(LARGE);
         webStart = true;
         startGrinding(true);
     }
@@ -87,7 +87,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
         extern bool webStart;
         extern void startGrinding(bool);
-        setPreset(LEFT);
+        setPreset(SMALL);
         webStart = true;
         startGrinding(true);
     }
@@ -103,12 +103,12 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     else if (String(topic) == "coffeegrinder/cmd/left")
     {
-        setPreset(LEFT);
+        setPreset(SMALL);
         LOGF("[SET PRESET] %s\n", "LEFT");
     }
     else if (String(topic) == "coffeegrinder/cmd/right")
     {
-        setPreset(RIGHT);
+        setPreset(LARGE);
         LOGF("[SET PRESET] %s\n", "RIGHT");
     }
 }
@@ -138,7 +138,7 @@ void addDeviceBlock(JsonObject& device) {
   device["manufacturer"] = "Danny Smolinsky";
   device["model"] = "CoffeeGrinder";
   device["name"] = "CoffeeGrinder";
-  device["sw_version"] = "1.1";
+  device["sw_version"] = "0.1";
 }
 
 // Hilfsfunktion: publish JSON Payload
@@ -275,7 +275,7 @@ void publishConfigsForHA() {
 
     // Presets Runs Counter
     publishConfig("homeassistant/sensor/coffeegrinder/presets_left_runs/config", [](JsonDocument& doc) {
-        doc["name"] = "Small Count";
+        doc["name"] = "Coffee Small Count";
         doc["unique_id"] = "coffeegrinder_presets_left_runs";
         doc["state_topic"] = "coffeegrinder/presets_left_runs";
 
@@ -284,7 +284,7 @@ void publishConfigsForHA() {
     });
 
     publishConfig("homeassistant/sensor/coffeegrinder/presets_right_runs/config", [](JsonDocument& doc) {
-        doc["name"] = "Large Count";
+        doc["name"] = "Coffee Large Count";
         doc["unique_id"] = "coffeegrinder_presets_right_runs";
         doc["state_topic"] = "coffeegrinder/presets_right_runs";
 
@@ -393,7 +393,7 @@ void mqttPublishState()
     static unsigned long lastPresetsLeftRun = -1;
     static unsigned long lastPresetsRightRun = -1;
     static float lastTotalWeight = -1;
-    static PresetSelection lastSelectedPreset = LEFT;
+    static PresetSelection lastSelectedPreset = SMALL;
     static State lastState = UNKNOWN;
 
     if (roundf(weight * 10.0f) != roundf(lastWeight * 10.0f)) {
@@ -421,14 +421,14 @@ void mqttPublishState()
         lastScaleFactor = scaleFactor;
     }
 
-    if (presetsLeftRun != lastPresetsLeftRun) {
-        mqttClient.publish("coffeegrinder/presets_left_runs", String(presetsLeftRun).c_str(), true);
-        lastPresetsLeftRun = presetsLeftRun;
+    if (presetsSmallRuns != lastPresetsLeftRun) {
+        mqttClient.publish("coffeegrinder/presets_left_runs", String(presetsSmallRuns).c_str(), true);
+        lastPresetsLeftRun = presetsSmallRuns;
     }
 
-    if (presetsRightRun != lastPresetsRightRun) {
-        mqttClient.publish("coffeegrinder/presets_right_runs", String(presetsRightRun).c_str(), true);
-        lastPresetsRightRun = presetsRightRun;
+    if (presetsLargeRuns != lastPresetsRightRun) {
+        mqttClient.publish("coffeegrinder/presets_right_runs", String(presetsLargeRuns).c_str(), true);
+        lastPresetsRightRun = presetsLargeRuns;
     }
 
     if (totalWeight != lastTotalWeight) {
@@ -437,8 +437,8 @@ void mqttPublishState()
     }
 
     if (selectedPreset != lastSelectedPreset) {
-        const char* preset = selectedPreset == LEFT ? "LEFT" : "RIGHT";
-        float timeValue = (selectedPreset == LEFT ? presetLeft : presetRight) / 10.0f;
+        const char* preset = selectedPreset == SMALL ? "LEFT" : "RIGHT";
+        float timeValue = (selectedPreset == SMALL ? presetLeft : presetRight) / 10.0f;
         String message = String(preset) + " (" + String(timeValue, 1) + "s)";
         mqttClient.publish("coffeegrinder/selected_preset", message.c_str(), true);
         lastSelectedPreset = selectedPreset;

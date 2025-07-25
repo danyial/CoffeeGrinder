@@ -18,6 +18,15 @@ Includes 3D-printable housing, custom PCB (KiCad), and open-source firmware for 
 - 📦 STL files for 3D-printed case
 - 🔌 KiCad schematics and PCB
 
+---
+
+## ⚙️ Cycloidal Drive (WIP)
+
+This project uses a custom 3D-printed **cycloidal drive** to reduce the stepper motor's speed and increase torque.  
+Currently, this mechanism is still under testing and may change in future iterations.
+
+Contributions, feedback, and test results are welcome!
+
 ## 🖼️ Images
 
 <p align="center">

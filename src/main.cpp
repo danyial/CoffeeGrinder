@@ -1,13 +1,14 @@
-#include <Arduino.h>
-#include <Adafruit_SSD1306.h>
-#include <Adafruit_GFX.h>
-#include <Wire.h>
-#include <Preferences.h>
 #include <AccelStepper.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Arduino.h>
 #include <Bounce2.h>
-#include "HX711.h"
 #include <esp_wifi.h>
+#include <Preferences.h>
 #include <WebServer.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include "HX711.h"
 #include "mqtt.h"
 #include "ota.h"
 #include "pins.h"
@@ -30,27 +31,43 @@ AccelStepper stepper(AccelStepper::DRIVER, PIN_STEP, PIN_DIR);
 // HX711 object
 HX711 scale;
 
-constexpr float MAX_STEPPER_SPEED = 6000.0;
+
+// Maximum speed of the stepper motor in steps per second
+constexpr float MAX_STEPPER_SPEED = 10000.0;
+
+// Acceleration of the stepper motor in steps per second squared
 constexpr float STEPPER_ACCELERATION = 400.0;
-constexpr float STEPPER_RUN_SPEED = 5000.0;
+
+// Default speed used during grinding
+constexpr float STEPPER_RUN_SPEED = 7000.0;
+
+// Interval for the main control loop in milliseconds
 constexpr unsigned long LOOP_INTERVAL_MS = 100;
+
+// Interval for refreshing the OLED display in milliseconds
 constexpr unsigned long DISPLAY_REFRESH_MS = 50;
+
+// Interval for updating the weight value from the scale in milliseconds
 constexpr unsigned long SCALE_INTERVAL_MS = 500;
+
+// Debounce delay for touch buttons in milliseconds
 constexpr unsigned long DEBOUNCE_DELAY = 50;
-// Maximum preset time in 0.1s units (60.0s)
+
+// Maximum allowed preset value (in 0.1g units) – corresponds to 30.0g
 constexpr uint16_t MAX_PRESET_WEIGHT = 300;
-// Minimum preset time in 0.1s units (0.1s)
+
+// Minimum allowed preset value (in 0.1g units) – corresponds to 0.1g
 constexpr uint16_t MIN_PRESET_WEIGHT = 1;
 
 volatile State state = IDLE;
 static float speed = STEPPER_RUN_SPEED;
 
-// Presets in 0.1 second steps
-uint16_t presetLeft = 120 * 10;
-uint16_t presetRight = 180 * 10;
+// Presets in 0.1g steps
+uint16_t presetLeft = 80;
+uint16_t presetRight = 120;
 
 // Currently selected preset
-PresetSelection selectedPreset = LEFT;
+PresetSelection selectedPreset = SMALL;
 
 // Preferences for NVS flash
 Preferences prefs;
@@ -60,57 +77,105 @@ float scaleFactor = 1.0;
 
 // Remaining time in 0.1s units
 uint16_t remaining;
+
 // Timestamp for run/pause timing
 unsigned long lastMillis;
+
+// Timestamp of the last scale read interval check in loop()
 unsigned long lastScaleMillis = 0;
 
+// Current weight in grams measured from the load cell
 float weight = 0.0;
+
+// Last weight value to detect changes for block detection
 float lastWeight = 0.0;
+
+// Timestamp of the last significant weight change
 unsigned long lastWeightChangeTime = 0;
 
+// Number of attempts to reverse the stepper motor during a blockage
 uint8_t reverseAttempts = 0;
 
-float blockThreshold = 0.07f;  // Initialwert für Blockiererkennungsschwelle (in Gramm)
-unsigned long presetsLeftRun = 0;  // Anzahl durchgelaufener Presets
-unsigned long presetsRightRun = 0;  // Anzahl durchgelaufener Presets
-float totalWeight = 0.0f;      // Gesamtgewicht des gemahlenen Kaffees
+// Threshold to detect if grinding is blocked (weight not changing)
+float blockThreshold = 0.07f;
+
+// Number of times the left preset was run
+unsigned long presetsSmallRuns = 0;
+
+// Number of times the right preset was run
+unsigned long presetsLargeRuns = 0;
+
+// Accumulated total weight of ground coffee
+float totalWeight = 0.0f;
+
+// Indicates whether grinding was started from the web interface
+bool webStart = false;
 
 // Long press threshold in milliseconds
 const unsigned long LONGPRESS_MS = 3000;
 
-bool webStart = false;
 
+// FreeRTOS task that periodically updates the OLED display with the current status
 void displayTask(void *pvParameters);
+
+// FreeRTOS task that reads the weight from the load cell at regular intervals
 void scaleTask(void *pvParameters);
+
+// FreeRTOS task that handles MQTT communication and state publishing
 void mqttTask(void *pvParameters);
 
+
+// Adjust the preset value (left or right) by a given delta in setting mode
 void adjustSetting(State s, int8_t delta);
+
+// Start the calibration process for the scale
 void calibrateScale();
+
+// Update the OLED display with the current state and values
 void drawDisplay();
+
+// Enter preset adjustment mode for the selected preset (left or right)
 void enterSetting(PresetSelection selection);
+
+// Handle press and long press events for preset selection buttons
 void handleButton(Bounce2::Button button, PresetSelection selection);
+
+// Handle press and long press events for the start button
 void handleStartButton(Bounce2::Button button);
+
+// Load configuration values from non-volatile storage (NVS)
 void loadPreferences();
+
+// Print the current state and settings to the Serial monitor
 void logState();
+
+// Save current configuration values to non-volatile storage (NVS)
 void savePreferences();
+
+// Set the active preset, store the preference, and prepare for grinding
 void setPreset(PresetSelection selection);
+
+// Update the remaining grind time based on the active preset
 void setRemainingTime();
+
+// Set the selected preset without changing state or storing preferences
 void setSelectedPreset(PresetSelection selection);
+
+// Change the machine's operating state and log the new state
 void setState(State s);
+
+// Initialize touch buttons with debounce configuration
 void setupButtons();
+
+// Initialize the stepper motor configuration and speed settings
 void setupStepper();
+
+// Begin the grinding process, optionally taring the scale
 void startGrinding(bool tareScale);
+
+// Reset the scale to zero
 void tareScale();
 
-void calibrateScale()
-{
-    setState(CALIBRATE);
-
-    Serial.println("== SCALE CALIBRATION ==");
-    Serial.println("Remove all weight. Taring...");
-    scale.tare();
-    Serial.println("Place known weight (e.g. 100g) and press Start button.");
-}
 
 // Initialize serial, display, buttons, preferences and create display task
 void setup()
@@ -174,7 +239,7 @@ void setupStepper()
 // Main loop handling state machine and button updates
 void loop()
 {   
-    ArduinoOTA.handle(); 
+    ArduinoOTA.handle();
 
     unsigned long now = millis();    
 
@@ -196,8 +261,8 @@ void loop()
         }
 
         handleStartButton(btnStart);
-        handleButton(btnL, LEFT);
-        handleButton(btnR, RIGHT);
+        handleButton(btnL, SMALL);
+        handleButton(btnR, LARGE);
 
         break;
     case RUNNING:
@@ -207,13 +272,13 @@ void loop()
         }
 
         // Check for weight change
-        if (fabs(weight - lastWeight) > blockThreshold) {  // Schwelle: 0.1 g
+        if (fabs(weight - lastWeight) > blockThreshold) {
             lastWeight = weight;
             lastWeightChangeTime = now;
             reverseAttempts = 0;
         }
 
-        if (stepper.speed() > 0 && now - lastWeightChangeTime >= 3000) {
+        if (stepper.speed() > 0 && now - lastWeightChangeTime >= 2000) {
             if (reverseAttempts < 3) {
                 stepper.setSpeed(-speed);
                 lastWeightChangeTime = now;
@@ -223,7 +288,7 @@ void loop()
                 reverseAttempts = 0;
                 setState(EMPTY);
             }
-        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 500) {
+        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 1500) {
             stepper.setSpeed(speed);
             lastWeightChangeTime = now;
         }
@@ -260,7 +325,7 @@ void loop()
 
         if (btnL.fell())
         {
-            setSelectedPreset(LEFT);
+            setSelectedPreset(SMALL);
             savePreferences();
             setRemainingTime();
             setState(IDLE);
@@ -268,17 +333,17 @@ void loop()
 
         if (btnR.fell())
         {
-            setSelectedPreset(RIGHT);
+            setSelectedPreset(LARGE);
             savePreferences();
             setRemainingTime();
             setState(IDLE);
         }
         break;
     case FINISHED:
-        if (selectedPreset == LEFT)
-            presetsLeftRun++;
+        if (selectedPreset == SMALL)
+            presetsSmallRuns++;
         else {
-            presetsRightRun++;
+            presetsLargeRuns++;
         }
         totalWeight += weight;
         setState(SAVING);
@@ -334,7 +399,7 @@ void loop()
 void setRemainingTime()
 {
     LOGF("[REMAINING] %d / %d g\n", presetLeft, presetRight);
-    remaining = (selectedPreset == LEFT) ? presetLeft : presetRight;
+    remaining = (selectedPreset == SMALL) ? presetLeft : presetRight;
 }
 
 void setPreset(PresetSelection selection) {
@@ -358,6 +423,16 @@ void setState(State s)
     logState();
 }
 
+void calibrateScale()
+{
+    setState(CALIBRATE);
+
+    Serial.println("== SCALE CALIBRATION ==");
+    Serial.println("Remove all weight. Taring...");
+    scale.tare();
+    Serial.println("Place known weight (e.g. 100g) and press Start button.");
+}
+
 void tareScale() {
     scale.tare();
 }
@@ -377,7 +452,7 @@ void startGrinding(bool tareScale)
 // Enter setting mode for selected preset
 void enterSetting(PresetSelection selection)
 {
-    setState(selection == LEFT ? SET_LEFT : SET_RIGHT);
+    setState(selection == SMALL ? SET_LEFT : SET_RIGHT);
 }
 
 // Adjust preset time in setting mode
@@ -449,20 +524,20 @@ void loadPreferences()
 {
     prefs.begin("coffee", false);
 
-    presetLeft = prefs.getUShort("pL", 120 * 10);
-    presetRight = prefs.getUShort("pR", 180 * 10);
+    presetLeft = prefs.getUShort("pL", 8 * 10);
+    presetRight = prefs.getUShort("pR", 12 * 10);
 
     LOGF("[PREFERENCES] %d / %d g\n", presetLeft, presetRight);
 
     uint32_t sel = prefs.getUInt("sel", static_cast<uint32_t>(selectedPreset));
-    selectedPreset = (sel <= RIGHT) ? static_cast<PresetSelection>(sel) : LEFT;
+    selectedPreset = (sel <= LARGE) ? static_cast<PresetSelection>(sel) : SMALL;
 
     scaleFactor = prefs.getFloat("scale", 1.0);
     scale.set_scale(scaleFactor);
 
     totalWeight = prefs.getFloat("totalWeight", 0.0);
-    presetsLeftRun = prefs.getULong("presetsLeftRun", 0);
-    presetsRightRun = prefs.getULong("presetsRightRun", 2);
+    presetsSmallRuns = prefs.getULong("presetsSmallRuns", 0);
+    presetsLargeRuns = prefs.getULong("presetsLargeRuns", 2);
 
     prefs.end();
 }
@@ -477,8 +552,8 @@ void savePreferences()
     prefs.putUInt("sel", static_cast<uint32_t>(selectedPreset));
     prefs.putFloat("scale", scaleFactor);
     prefs.putFloat("totalWeight", totalWeight);
-    prefs.putULong("presetsLeftRun", presetsLeftRun);
-    prefs.putULong("presetsRightRun", presetsRightRun);
+    prefs.putULong("presetsSmallRuns", presetsSmallRuns);
+    prefs.putULong("presetsLargeRuns", presetsLargeRuns);
 
     prefs.end();
 
@@ -495,7 +570,7 @@ void drawDisplay()
     switch (state)
     {
     case IDLE:
-        sprintf(buf, "%4.1fg", (selectedPreset == LEFT ? presetLeft : presetRight) / 10.0);
+        sprintf(buf, "%4.1fg", (selectedPreset == SMALL ? presetLeft : presetRight) / 10.0);
         break;
     case WEIGHING:
     case RUNNING:
@@ -530,6 +605,7 @@ void drawDisplay()
         sprintf(buf, "Update...");
         break;
     }
+
     int16_t x1, y1;
     uint16_t w, h;
     display.setTextSize(2);
@@ -567,7 +643,7 @@ String stateToString(State s)
 void logState()
 {
     LOGF("[STATE] %s\n", stateToString(state));
-    LOGF("[PRESET] %s\n", (selectedPreset == LEFT) ? "LEFT" : "RIGHT");
+    LOGF("[PRESET] %s\n", (selectedPreset == SMALL) ? "LEFT" : "RIGHT");
     LOGF("[REMAINING] %.1fs\n", remaining / 10.0);
 }
 

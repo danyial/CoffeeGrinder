@@ -213,9 +213,9 @@ void setupWebServer() {
                 else
                     startGrinding(true);
             } else if (cmd == "left") {
-                setPreset(LEFT);
+                setPreset(SMALL);
             } else if (cmd == "right") {
-                setPreset(RIGHT);
+                setPreset(LARGE);
             }
         }
         request->send(200, "text/plain", "Action executed");
@@ -368,6 +368,13 @@ void startWifi() {
         // Wir haben eine gespeicherte SSID → direkt verbinden
         WiFi.begin(ssid.c_str(), pass.c_str());
         setupWebServer();
+
+        WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+            if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+                Serial.println("[WiFi] Disconnected, trying to reconnect...");
+                WiFi.reconnect();
+            }
+        });
     } else {
         // Keine gespeicherte SSID → Config Portal starten
         startConfigPortal();

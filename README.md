@@ -75,6 +75,7 @@ CoffeeGrinder/
 - HX711 Weight Sensor [🛒 Amazon](https://amzn.to/4lEH1bS)
 - Scale [🛒 Amazon](https://amzn.to/3Uswbtt)
 - 3x TTP223 Touch Sensors [🛒 Amazon](https://amzn.to/4133kje)
+- 3x 10nF Capacitors [🛒 Amazon](https://amzn.to/3IF0UBf)
 - NEMA 17 Stepper Motor [🛒 Amazon](https://amzn.to/4lTh3BO)
 - Stepper Driver (e.g., TMC2209) [🛒 Amazon](https://amzn.to/45koFHp)
 - 2x Bearing 30x37x4 [🛒 Amazon](https://amzn.to/46XXUtu)

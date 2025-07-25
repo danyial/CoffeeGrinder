@@ -39,7 +39,7 @@ constexpr float MAX_STEPPER_SPEED = 10000.0;
 constexpr float STEPPER_ACCELERATION = 400.0;
 
 // Default speed used during grinding
-constexpr float STEPPER_RUN_SPEED = 7000.0;
+constexpr float STEPPER_RUN_SPEED = 8000.0;
 
 // Interval for the main control loop in milliseconds
 constexpr unsigned long LOOP_INTERVAL_MS = 100;
@@ -62,9 +62,9 @@ constexpr uint16_t MIN_PRESET_WEIGHT = 1;
 volatile State state = IDLE;
 static float speed = STEPPER_RUN_SPEED;
 
-// Presets in 0.1g steps
-uint16_t presetLeft = 80;
-uint16_t presetRight = 120;
+// Presets in grams
+uint16_t presetSmall = 8;
+uint16_t presetLarge = 12;
 
 // Currently selected preset
 PresetSelection selectedPreset = SMALL;
@@ -187,7 +187,6 @@ void setup()
     setupOTA();
 
     setupMqtt();
-    publishConfigsForHA();
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
     {
@@ -288,7 +287,7 @@ void loop()
                 reverseAttempts = 0;
                 setState(EMPTY);
             }
-        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 1500) {
+        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 500) {
             stepper.setSpeed(speed);
             lastWeightChangeTime = now;
         }
@@ -398,8 +397,8 @@ void loop()
 // Set remaining time based on selected preset
 void setRemainingTime()
 {
-    LOGF("[REMAINING] %d / %d g\n", presetLeft, presetRight);
-    remaining = (selectedPreset == SMALL) ? presetLeft : presetRight;
+    LOGF("[REMAINING] %.1fg / %.1fg\n", presetSmall / 10.0, presetLarge / 10.0);
+    remaining = (selectedPreset == SMALL) ? presetSmall : presetLarge;
 }
 
 void setPreset(PresetSelection selection) {
@@ -459,11 +458,11 @@ void enterSetting(PresetSelection selection)
 void adjustSetting(State s, int8_t delta)
 {
     if (s == SET_LEFT)
-        presetLeft += delta;
+        presetSmall += delta;
     else
-        presetRight += delta;
-    presetLeft = constrain(presetLeft, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
-    presetRight = constrain(presetRight, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
+        presetLarge += delta;
+    presetSmall = constrain(presetSmall, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
+    presetLarge = constrain(presetLarge, MIN_PRESET_WEIGHT, MAX_PRESET_WEIGHT);
 }
 
 // Handle button press for short and long press actions
@@ -524,10 +523,10 @@ void loadPreferences()
 {
     prefs.begin("coffee", false);
 
-    presetLeft = prefs.getUShort("pL", 8 * 10);
-    presetRight = prefs.getUShort("pR", 12 * 10);
+    presetSmall = prefs.getUShort("pL", 8 * 10);
+    presetLarge = prefs.getUShort("pR", 12 * 10);
 
-    LOGF("[PREFERENCES] %d / %d g\n", presetLeft, presetRight);
+    LOGF("[PREFERENCES] %d / %d g\n", presetSmall, presetLarge);
 
     uint32_t sel = prefs.getUInt("sel", static_cast<uint32_t>(selectedPreset));
     selectedPreset = (sel <= LARGE) ? static_cast<PresetSelection>(sel) : SMALL;
@@ -547,8 +546,8 @@ void savePreferences()
 {
     prefs.begin("coffee", false);
 
-    prefs.putUShort("pL", presetLeft);
-    prefs.putUShort("pR", presetRight);
+    prefs.putUShort("pL", presetSmall);
+    prefs.putUShort("pR", presetLarge);
     prefs.putUInt("sel", static_cast<uint32_t>(selectedPreset));
     prefs.putFloat("scale", scaleFactor);
     prefs.putFloat("totalWeight", totalWeight);
@@ -570,7 +569,7 @@ void drawDisplay()
     switch (state)
     {
     case IDLE:
-        sprintf(buf, "%4.1fg", (selectedPreset == SMALL ? presetLeft : presetRight) / 10.0);
+        sprintf(buf, "%4.1fg", (selectedPreset == SMALL ? presetSmall : presetLarge) / 10.0);
         break;
     case WEIGHING:
     case RUNNING:
@@ -590,10 +589,10 @@ void drawDisplay()
         sprintf(buf, "Gespeichert!");
         break;
     case SET_LEFT:
-        sprintf(buf, "Setze Kl.: %4.1f%s", presetLeft / 10.0, "g");
+        sprintf(buf, "Setze Kl.: %4.1f%s", presetSmall / 10.0, "g");
         break;
     case SET_RIGHT:
-        sprintf(buf, "Setze Gr.: %4.1f%s", presetRight / 10.0, "g");
+        sprintf(buf, "Setze Gr.: %4.1f%s", presetLarge / 10.0, "g");
         break;
     case CALIBRATE:
         sprintf(buf, "Kalibrierung");
@@ -643,8 +642,8 @@ String stateToString(State s)
 void logState()
 {
     LOGF("[STATE] %s\n", stateToString(state));
-    LOGF("[PRESET] %s\n", (selectedPreset == SMALL) ? "LEFT" : "RIGHT");
-    LOGF("[REMAINING] %.1fs\n", remaining / 10.0);
+    LOGF("[PRESET] %s\n", (selectedPreset == SMALL) ? "SMALL" : "LARGE");
+    LOGF("[REMAINING] %.1fg\n", remaining / 10.0);
 }
 
 // FreeRTOS task to refresh the display periodically

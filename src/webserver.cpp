@@ -12,8 +12,8 @@ extern void calibrateScale();
 extern float scaleFactor;
 extern uint16_t remaining;
 extern PresetSelection selectedPreset;
-extern uint16_t presetLeft;
-extern uint16_t presetRight;
+extern uint16_t presetSmall;
+extern uint16_t presetLarge;
 extern void savePreferences();
 extern void startGrinding(bool tareScale);
 extern void setPreset(PresetSelection selection);
@@ -83,9 +83,9 @@ void setupWebServer() {
         "<form id='settingsForm'>"
         "<h3>Settings</h3>"
         "<label id='labelLeft' for='left'>Left Preset (Grams)</label>"
-        "<input type='number' step='0.1' id='left' name='left' value='" + String(presetLeft / 10.0f, 1) + "'>"
+        "<input type='number' step='0.1' id='left' name='left' value='" + String(presetSmall / 10.0f, 1) + "'>"
         "<label id='labelRight' for='right'>Right Preset (Grams)</label>"
-        "<input type='number' step='0.1' id='right' name='right' value='" + String(presetRight / 10.0f, 1) + "'>"
+        "<input type='number' step='0.1' id='right' name='right' value='" + String(presetLarge / 10.0f, 1) + "'>"
         "<input type='submit' value='Save Settings'>"
         "</form>"
         "<div style='height:20px;'></div>"
@@ -173,8 +173,8 @@ void setupWebServer() {
             float val = rawLeft.toFloat();
             LOGF("[WEB] Parsed left preset: %.2f\n", val);
             if (val >= 0.1 && val <= 180.0) {
-                presetLeft = static_cast<uint16_t>(val * 10.0f);
-                LOGF("[WEB] Stored presetLeft: %d\n", presetLeft);
+                presetSmall = static_cast<uint16_t>(val * 10.0f);
+                LOGF("[WEB] Stored presetSmall: %d\n", presetSmall);
             }
         }
         if (request->hasParam("right")) {
@@ -183,8 +183,8 @@ void setupWebServer() {
             float val = rawRight.toFloat();
             LOGF("[WEB] Parsed right preset: %.2f\n", val);
             if (val >= 0.1 && val <= 180.0) {
-                presetRight = static_cast<uint16_t>(val * 10.0f);
-                LOGF("[WEB] Stored presetRight: %d\n", presetRight);
+                presetLarge = static_cast<uint16_t>(val * 10.0f);
+                LOGF("[WEB] Stored presetLarge: %d\n", presetLarge);
             }
         }
         savePreferences();
@@ -194,10 +194,10 @@ void setupWebServer() {
     // Presets einstellen (left/right)
     server.on("/setPreset", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (request->hasParam("left")) {
-            presetLeft = request->getParam("left")->value().toFloat();
+            presetSmall = request->getParam("left")->value().toFloat();
         }
         if (request->hasParam("right")) {
-            presetRight = request->getParam("right")->value().toFloat();
+            presetLarge = request->getParam("right")->value().toFloat();
         }
         savePreferences();
         request->send(200, "text/plain", "Presets updated");
@@ -367,7 +367,16 @@ void startWifi() {
     if (ssid.length() > 0) {
         // Wir haben eine gespeicherte SSID → direkt verbinden
         WiFi.begin(ssid.c_str(), pass.c_str());
+        Serial.printf("[WiFi] Connecting to SSID: %s\n", ssid.c_str());
         setupWebServer();
+
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(500);
+            Serial.print(".");
+        }
+        Serial.println();
+        Serial.printf("[WiFi] Connected to %s\n", WiFi.SSID().c_str());
+        Serial.printf("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
 
         WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
             if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {

@@ -15,11 +15,6 @@ enum PresetSelection {
     LARGE
 };
 
-enum PresetMode { 
-    MODE_TIME, 
-    MODE_WEIGHT 
-};
-
 enum State
 {
     CALIBRATE,

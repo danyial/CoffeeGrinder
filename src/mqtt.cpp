@@ -400,6 +400,14 @@ void mqttPublishState()
         lastWeight = weight;
     }
 
+    if (selectedPreset != lastSelectedPreset || presetSmall != lastPresetSmall || presetLarge != lastPresetLarge) {
+        const char* preset = selectedPreset == SMALL ? "SMALL" : "LARGE";
+        float timeValue = (selectedPreset == SMALL ? presetSmall : presetLarge) / 10.0f;
+        String message = String(preset) + " (" + String(timeValue, 1) + "s)";
+        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/selected_preset").c_str(), message.c_str(), true);
+        lastSelectedPreset = selectedPreset;
+    }
+
     if (presetSmall != lastPresetSmall) {
         mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/preset_left").c_str(), String(presetSmall / 10.0f, 1).c_str(), true);
         lastPresetSmall = presetSmall;
@@ -433,14 +441,6 @@ void mqttPublishState()
     if (totalWeight != lastTotalWeight) {
         mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/total_weight").c_str(), String(totalWeight, 1).c_str(), true);
         lastTotalWeight = totalWeight;
-    }
-
-    if (selectedPreset != lastSelectedPreset) {
-        const char* preset = selectedPreset == SMALL ? "SMALL" : "LARGE";
-        float timeValue = (selectedPreset == SMALL ? presetSmall : presetLarge) / 10.0f;
-        String message = String(preset) + " (" + String(timeValue, 1) + "s)";
-        mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/selected_preset").c_str(), message.c_str(), true);
-        lastSelectedPreset = selectedPreset;
     }
 
     if (state != lastState) {

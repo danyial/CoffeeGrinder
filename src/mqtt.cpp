@@ -1,9 +1,10 @@
-#include "mqtt.h"
-#include "types.h"
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include "mqtt.h"
+#include "types.h"
+#include "version.h"
 
 // MQTT-Config
 const char *mqtt_server = "";
@@ -42,15 +43,11 @@ extern void setPreset(PresetSelection selection);
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
-    LOGF("[CALLBACK] %s\n", topic);
-
     String message;
     for (unsigned int i = 0; i < length; i++)
     {
         message += (char)payload[i];
     }
-
-    LOGF("[CALLBACK] %s\n", message);
 
     if (String(topic) == "coffeegrinder/" + mqttIdentifier + "/preset_left/set")
     {
@@ -140,7 +137,7 @@ void addDeviceBlock(JsonObject& device) {
   device["manufacturer"] = "Danny Smolinsky";
   device["model"] = "CoffeeGrinder";
   device["name"] = "CoffeeGrinder";
-  device["sw_version"] = "0.0.1";
+  device["sw_version"] = CURRENT_VERSION;
 }
 
 // Hilfsfunktion: publish JSON Payload

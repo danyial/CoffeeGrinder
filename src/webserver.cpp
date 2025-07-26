@@ -111,11 +111,6 @@ void setupWebServer() {
         "<input type='submit' value='Start Calibration'>"
         "</form>"
         "<div style='height:20px;'></div>"
-        "<form id='autoUpdateForm' style='max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>"
-        "<h3>Update</h3>"
-        "<input type='submit' value='Check & Update'>"
-        "</form>"
-        "<div style='height:20px;'></div>"
         "<form id='restartForm' style='max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>"
         "<h3>Restart</h3>"
         "<input type='submit' value='Restart ESP'>"
@@ -137,14 +132,6 @@ void setupWebServer() {
         "  e.preventDefault();"
         "  fetch('/calibrate')"
         "    .then(() => showToast('Calibration complete!'));"
-        "});"
-        "document.getElementById('autoUpdateForm').addEventListener('submit', function(e) {"
-        "  e.preventDefault();"
-        "  fetch('/autoupdate')"
-        "    .then(() => {"
-        "      showToast('Update complete!'));"
-        "      setTimeout(() => location.reload(), 2000);"
-        "    )}"
         "});"
         "document.getElementById('restartForm').addEventListener('submit', function(e) {"
         "  e.preventDefault();"
@@ -293,9 +280,17 @@ void setupWebServer() {
     server.on("/autoupdate", HTTP_GET, [](AsyncWebServerRequest *request) {
         HTTPClient http;
         http.begin("https://api.github.com/repos/danyial/CoffeeGrinder/releases/latest");
-        http.setUserAgent("CoffeeGrinder_ESP32");
+        http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+        http.setUserAgent("ESP32");
+        http.setConnectTimeout(5000);
 
         int httpCode = http.GET();
+        LOGF("HTTP Code: %d", httpCode);
+
+        if (httpCode < 0) {
+            LOGF("ERROR: %s", http.errorToString(httpCode).c_str());
+        }
+
         if (httpCode != 200) {
             request->send(500, "text/plain", "Failed to check for update.");
             return;
@@ -305,11 +300,14 @@ void setupWebServer() {
         DeserializationError error = deserializeJson(doc, http.getString());
 
         if (error) {
+            LOGF("Error: %s", error.c_str());
             request->send(500, "text/plain", "Failed to parse release data.");
             return;
         }
 
         String latest = doc["tag_name"] | "";
+        LOGF("Latest Version: %s", latest);
+
         if (latest == CURRENT_VERSION) {
             request->send(200, "text/plain", "Already up to date.");
             return;
@@ -322,6 +320,8 @@ void setupWebServer() {
                 break;
             }
         }
+
+        LOGF("Firmware URL: %s", firmwareUrl);
 
         if (firmwareUrl == "") {
             request->send(500, "text/plain", "Firmware .bin not found.");

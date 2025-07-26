@@ -111,6 +111,11 @@ void setupWebServer() {
         "<input type='submit' value='Start Calibration'>"
         "</form>"
         "<div style='height:20px;'></div>"
+        "<form id='autoUpdateForm' style='max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>"
+        "<h3>Update</h3>"
+        "<input type='submit' value='Check & Update'>"
+        "</form>"
+        "<div style='height:20px;'></div>"
         "<form id='restartForm' style='max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>"
         "<h3>Restart</h3>"
         "<input type='submit' value='Restart ESP'>"
@@ -132,6 +137,14 @@ void setupWebServer() {
         "  e.preventDefault();"
         "  fetch('/calibrate')"
         "    .then(() => showToast('Calibration complete!'));"
+        "});"
+        "document.getElementById('autoUpdateForm').addEventListener('submit', function(e) {"
+        "  e.preventDefault();"
+        "  fetch('/autoupdate')"
+        "    .then(() => {"
+        "      showToast('Update complete!'));"
+        "      setTimeout(() => location.reload(), 2000);"
+        "    )}"
         "});"
         "document.getElementById('restartForm').addEventListener('submit', function(e) {"
         "  e.preventDefault();"
@@ -279,8 +292,8 @@ void setupWebServer() {
 
     server.on("/autoupdate", HTTP_GET, [](AsyncWebServerRequest *request) {
         HTTPClient http;
-        http.begin("https://api.github.com/repos/deinuser/CoffeeGrinder/releases/latest");
-        http.setUserAgent("ESP32");  // wichtig für GitHub API
+        http.begin("https://api.github.com/repos/danyial/CoffeeGrinder/releases/latest");
+        http.setUserAgent("CoffeeGrinder_ESP32");
 
         int httpCode = http.GET();
         if (httpCode != 200) {

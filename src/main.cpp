@@ -97,7 +97,7 @@ unsigned long lastWeightChangeTime = 0;
 uint8_t reverseAttempts = 0;
 
 // Threshold to detect if grinding is blocked (weight not changing)
-float blockThreshold = 0.07f;
+float blockThreshold = 0.05;
 
 // Number of times the left preset was run
 unsigned long presetSmallRuns = 0;
@@ -106,7 +106,7 @@ unsigned long presetSmallRuns = 0;
 unsigned long presetLargeRuns = 0;
 
 // Accumulated total weight of ground coffee
-float totalWeight = 0.0f;
+float totalWeight = 0.0;
 
 // Indicates whether grinding was started from the web interface
 bool webStart = false;
@@ -537,6 +537,7 @@ void loadPreferences()
     totalWeight = prefs.getFloat("totalWeight", 0.0);
     presetSmallRuns = prefs.getULong("presetSmallRuns", 0);
     presetLargeRuns = prefs.getULong("presetLargeRuns", 0);
+    blockThreshold = prefs.getFloat("blockThreshold", 0.5);
 
     // presetSmallRuns = 1;
     // presetLargeRuns = 5;
@@ -558,6 +559,7 @@ void savePreferences()
     prefs.putFloat("totalWeight", totalWeight);
     prefs.putULong("presetSmallRuns", presetSmallRuns);
     prefs.putULong("presetLargeRuns", presetLargeRuns);
+    prefs.putFloat("blockThreshold", blockThreshold);
 
     prefs.end();
 

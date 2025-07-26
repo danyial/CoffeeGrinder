@@ -37,7 +37,7 @@ void setupWebServer() {
         prefs.end();
 
         String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<title>Settings - CoffeeGrinder</title><style>"
+        "<title>CoffeeGrinder</title><style>"
         "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }"
         "h1 { text-align: center; }"
         "form { max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }"
@@ -158,7 +158,7 @@ void setupWebServer() {
         "    .then(() => showToast(`Action '${cmd}' sent!`));"
         "}"
         "</script>"
-        "<div style='text-align:center; color:#888; font-size:0.9em; margin-top:40px;'>Build: " __DATE__ " - " __TIME__ "</div>"
+        "<div style='text-align:center; color:#888; font-size:0.9em; margin-top:40px;'>Build: " CURRENT_VERSION "</div>"
         "</body></html>";
         request->send(200, "text/html", html);
     });
@@ -450,7 +450,12 @@ void startWifi() {
         WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
             if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
                 Serial.println("[WiFi] Disconnected, trying to reconnect...");
-                WiFi.reconnect();
+                
+                while (WiFi.status() != WL_CONNECTED) {
+                    WiFi.reconnect();
+                    delay(5000);
+                    Serial.print(".");
+                }
             }
         });
     } else {

@@ -179,7 +179,7 @@ void setupMqtt() {
 
 void publishConfigsForHA() {
     // MQTT Status (optional, for Home Assistant reference)
-    publishConfig("homeassistant/sensor/coffeegrinder/status/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/status/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "MQTT Status";
         doc["unique_id"] = mqttIdentifier + "_status";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/status";
@@ -189,7 +189,7 @@ void publishConfigsForHA() {
     });
 
     // CoffeeGrinder Weight
-    publishConfig("homeassistant/sensor/coffeegrinder/weight/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/weight/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Current Weight";
         doc["unique_id"] = mqttIdentifier + "_current_weight";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/current_weight";
@@ -200,7 +200,7 @@ void publishConfigsForHA() {
     });
 
     // Preset Left
-    publishConfig("homeassistant/number/coffeegrinder/preset_left/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/number/" + mqttIdentifier + "/preset_left/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Coffee Small";
         doc["unique_id"] = mqttIdentifier + "_preset_left";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/preset_left/set";
@@ -215,7 +215,7 @@ void publishConfigsForHA() {
     });
 
     // Preset Right
-    publishConfig("homeassistant/number/coffeegrinder/preset_right/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/number/" + mqttIdentifier + "/preset_right/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Coffee Large";
         doc["unique_id"] = mqttIdentifier + "_preset_right";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/preset_right/set";
@@ -230,7 +230,7 @@ void publishConfigsForHA() {
     });
 
     // Selected Preset
-    publishConfig("homeassistant/sensor/coffeegrinder/selected_preset/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/selected_preset/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Selected Preset";
         doc["unique_id"] = mqttIdentifier + "_selected_preset";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/selected_preset";
@@ -240,7 +240,7 @@ void publishConfigsForHA() {
     });
 
     // Current State
-    publishConfig("homeassistant/sensor/coffeegrinder/current_state/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/current_state/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Current State";
         doc["unique_id"] = mqttIdentifier + "_current_state";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/current_state";
@@ -250,7 +250,7 @@ void publishConfigsForHA() {
     });
 
     // Block Threshold
-    publishConfig("homeassistant/number/coffeegrinder/block_threshold/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/number/" + mqttIdentifier + "/block_threshold/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Block Threshold";
         doc["unique_id"] = mqttIdentifier + "_block_threshold";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/block_threshold/set";
@@ -263,7 +263,7 @@ void publishConfigsForHA() {
     });
 
     // Scale Factor
-    publishConfig("homeassistant/sensor/coffeegrinder/scale_factor/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/scale_factor/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Scale Factor";
         doc["unique_id"] = mqttIdentifier + "_scale_factor";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/scale_factor";
@@ -273,7 +273,7 @@ void publishConfigsForHA() {
     });
 
     // Presets Runs Counter
-    publishConfig("homeassistant/sensor/coffeegrinder/presets_left_runs/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/presets_left_runs/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Coffee Small Count";
         doc["unique_id"] = mqttIdentifier + "_presets_left_runs";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/presets_left_runs";
@@ -282,7 +282,7 @@ void publishConfigsForHA() {
         addDeviceBlock(device);
     });
 
-    publishConfig("homeassistant/sensor/coffeegrinder/presets_right_runs/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/presets_right_runs/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Coffee Large Count";
         doc["unique_id"] = mqttIdentifier + "_presets_right_runs";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/presets_right_runs";
@@ -292,7 +292,7 @@ void publishConfigsForHA() {
     });
 
     // Total Weight Counter
-    publishConfig("homeassistant/sensor/coffeegrinder/total_weight/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/sensor/" + mqttIdentifier + "/total_weight/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Total Weight";
         doc["unique_id"] = mqttIdentifier + "_total_weight";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/total_weight";
@@ -303,7 +303,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Start
-    publishConfig("homeassistant/button/coffeegrinder/start/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/start/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Start";
         doc["unique_id"] = mqttIdentifier + "_cmd_start";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/start";
@@ -313,7 +313,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Start Left
-    publishConfig("homeassistant/button/coffeegrinder/start_left/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/start_left/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Start Small";
         doc["unique_id"] = mqttIdentifier + "_cmd_start_left";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/start_left";
@@ -323,7 +323,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Start Right
-    publishConfig("homeassistant/button/coffeegrinder/start_right/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/start_right/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Start Large";
         doc["unique_id"] = mqttIdentifier + "_cmd_start_right";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/start_right";
@@ -333,7 +333,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Calibrate
-    publishConfig("homeassistant/button/coffeegrinder/calibrate/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/calibrate/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Calibrate";
         doc["unique_id"] = mqttIdentifier + "_cmd_calibrate";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/calibrate";
@@ -343,7 +343,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Tare scale
-    publishConfig("homeassistant/button/coffeegrinder/tare_scale/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/tare_scale/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Tare Scale";
         doc["unique_id"] = mqttIdentifier + "_cmd_tare_scale";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/tare_scale";
@@ -353,7 +353,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Preset Left
-    publishConfig("homeassistant/button/coffeegrinder/left/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/left/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Small";
         doc["unique_id"] = mqttIdentifier + "_cmd_press_left";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/left";
@@ -363,7 +363,7 @@ void publishConfigsForHA() {
     });
 
     // Button: Preset Right
-    publishConfig("homeassistant/button/coffeegrinder/right/config", [](JsonDocument& doc) {
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/right/config").c_str(), [](JsonDocument& doc) {
         doc["name"] = "Press Large";
         doc["unique_id"] = mqttIdentifier + "_cmd_press_right";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/right";

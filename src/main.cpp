@@ -112,7 +112,7 @@ float totalWeight = 0.0;
 bool webStart = false;
 
 // Long press threshold in milliseconds
-const unsigned long LONGPRESS_MS = 3000;
+const unsigned long LONGPRESS_MS = 2000;
 
 
 // FreeRTOS task that periodically updates the OLED display with the current status
@@ -391,6 +391,9 @@ void loop()
             setState(SAVING);
         }
         break;
+    case WEIGHING:
+        handleStartButton(btnStart);
+        break;
     }
 }
 
@@ -404,7 +407,6 @@ void setRemainingTime()
 void setPreset(PresetSelection selection) {
     setSelectedPreset(selection);
     savePreferences();
-    setRemainingTime();
     setState(IDLE);
     scale.tare();
 }
@@ -433,6 +435,7 @@ void calibrateScale()
 }
 
 void tareScale() {
+    LOG("Tare Scale");
     scale.tare();
 }
 
@@ -468,53 +471,70 @@ void adjustSetting(State s, int8_t delta)
 // Handle button press for short and long press actions
 void handleStartButton(Bounce2::Button button)
 {
-    // Long Press
-    // if (button.isPressed())
-    // {
-    //     if (button.currentDuration() >= LONGPRESS_MS)
-    //     {
-    //         if (state == IDLE) {
-    //             setState(WEIGHING);
-    //             tareScale();
-    //         } else if (state == WEIGHING) {
-    //             setState(IDLE);
-    //         }
-    //     }
-    // }
+    static bool isSetWeighing = false;
+    static bool isSetIdle = false;
 
-    // Short Press
-    if (button.pressed())
-    {
-        if (button.currentDuration() < LONGPRESS_MS)
-        {
-            if (state == IDLE) {
-                startGrinding(true);
-            } else if (state == WEIGHING) {
-                tareScale();
-            }
-        }
-    }
-}
-
-void handleButton(Bounce2::Button button, PresetSelection selection)
-{
     // Long Press
     if (button.isPressed())
     {
         if (button.currentDuration() >= LONGPRESS_MS)
         {
-            enterSetting(selection);
-            logState();
+            if (state == IDLE && !isSetIdle) {
+                isSetWeighing = true;
+                setState(WEIGHING);
+                tareScale();
+            } else if (state == WEIGHING && !isSetWeighing) {
+                isSetIdle = true;
+                setState(IDLE);
+            }
         }
     }
 
     // Short Press
-    if (button.pressed())
+    else if (button.released())
+    {
+        LOG("RELEASED");
+        if (button.currentDuration() < LONGPRESS_MS)
+        {
+            LOG("SHORT");
+            if (state == IDLE && !isSetIdle) {
+                LOG("Start Grinding");
+                startGrinding(true);
+            } else if (state == WEIGHING && !isSetWeighing) {
+                tareScale();
+            }
+        }
+
+        isSetIdle = false;
+        isSetWeighing = false;
+    }
+}
+
+void handleButton(Bounce2::Button button, PresetSelection selection)
+{
+    static bool isSetSettings = false;
+
+    // Long Press
+    if (button.isPressed())
+    {
+        if (button.currentDuration() >= LONGPRESS_MS && !isSetSettings)
+        {
+            LOG("Enter Settings");
+            isSetSettings = true;
+            enterSetting(selection);
+        }
+    }
+
+    // Short Press
+    if (button.released())
     {
         if (button.currentDuration() < LONGPRESS_MS)
         {
+            LOG("Set Preset");
             setPreset(selection);
         }
+
+        isSetSettings = false;
     }
 }
 

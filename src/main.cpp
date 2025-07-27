@@ -97,7 +97,7 @@ unsigned long lastWeightChangeTime = 0;
 uint8_t reverseAttempts = 0;
 
 // Threshold to detect if grinding is blocked (weight not changing)
-float blockThreshold = 0.05;
+float blockThreshold = 0.03;
 
 // Number of times the left preset was run
 unsigned long presetSmallRuns = 0;
@@ -557,7 +557,7 @@ void loadPreferences()
     totalWeight = prefs.getFloat("totalWeight", 0.0);
     presetSmallRuns = prefs.getULong("presetSmallRuns", 0);
     presetLargeRuns = prefs.getULong("presetLargeRuns", 0);
-    blockThreshold = prefs.getFloat("blockThreshold", 0.5);
+    blockThreshold = prefs.getFloat("blockThreshold", 0.3);
 
     // presetSmallRuns = 1;
     // presetLargeRuns = 5;

@@ -29,8 +29,8 @@ jobs:
       - name: Install platformIO libraries
         run: pio lib install
         
-      - name: Build firmware
-        run: platformio run
+      - name: Build firmware (Release, no logging)
+        run: platformio run -e esp32doit-devkit-v1 -D ENABLE_LOGGING=false
 
       - name: Create Gerber zip
         run: |

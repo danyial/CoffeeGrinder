@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef ENABLE_LOGGING
 #define ENABLE_LOGGING true
+#endif
 
 #if ENABLE_LOGGING
 #define LOG(x) Serial.println(x)

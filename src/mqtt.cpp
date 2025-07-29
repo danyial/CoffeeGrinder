@@ -277,6 +277,7 @@ void publishConfigsForHA() {
         doc["name"] = "Coffee Small Count";
         doc["unique_id"] = mqttIdentifier + "_presets_left_runs";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/presets_left_runs";
+        doc["state_class"] = "total_increasing";
 
         JsonObject device = doc["device"].to<JsonObject>();
         addDeviceBlock(device);
@@ -286,6 +287,7 @@ void publishConfigsForHA() {
         doc["name"] = "Coffee Large Count";
         doc["unique_id"] = mqttIdentifier + "_presets_right_runs";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/presets_right_runs";
+        doc["state_class"] = "total_increasing";
 
         JsonObject device = doc["device"].to<JsonObject>();
         addDeviceBlock(device);

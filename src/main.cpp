@@ -183,6 +183,7 @@ void setup()
     Serial.begin(115200);
 
     startWifi();
+    setupWebServer();
 
     setupOTA();
 
@@ -190,7 +191,7 @@ void setup()
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
     {
-        Serial.println(F("SSD1306 allocation failed"));
+        LOG(F("SSD1306 allocation failed"));
         for (;;);
     }
     display.clearDisplay();
@@ -376,14 +377,12 @@ void loop()
             // scale.tare();
 
             long reading = scale.get_value(10);
-            Serial.print("Raw reading: ");
-            Serial.println(reading);
+            LOGF("Raw reading: %ld", reading);
 
             float known_weight = 10.92;
             float factor = (float)reading / known_weight;
 
-            Serial.print("Calibration factor set: ");
-            Serial.println(factor, 2);
+            LOGF("Calibration factor set: %.2f\n", factor);
 
             scaleFactor = factor;
             scale.set_scale(scaleFactor);
@@ -428,10 +427,10 @@ void calibrateScale()
 {
     setState(CALIBRATE);
 
-    Serial.println("== SCALE CALIBRATION ==");
-    Serial.println("Remove all weight. Taring...");
+    LOG("== SCALE CALIBRATION ==");
+    LOG("Remove all weight. Taring...");
     scale.tare();
-    Serial.println("Place known weight (e.g. 100g) and press Start button.");
+    LOG("Place known weight (e.g. 100g) and press Start button.");
 }
 
 void tareScale() {
@@ -665,7 +664,7 @@ String stateToString(State s)
     }
 }
 
-// Log current state, preset and remaining time via Serial
+// Log current state, preset and remaining time
 void logState()
 {
     LOGF("[STATE] %s\n", stateToString(state));

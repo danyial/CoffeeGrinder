@@ -24,7 +24,17 @@ extern bool webStart;
 extern void setState(State s);
 extern volatile State state;
 
+void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info);
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
+void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);
+
 AsyncWebServer server(80);
+
+void setupWiFiEvents() {
+    WiFi.onEvent(WiFiStationConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+    WiFi.onEvent(WiFiGotIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(WiFiStationDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+}
 
 void setupWebServer() {
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -257,7 +267,7 @@ void setupWebServer() {
         [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
             if (!index) {
                 setState(UPDATING);
-                Serial.printf("Update Start: %s\n", filename.c_str());
+                LOGF("Update Start: %s\n", filename.c_str());
                 if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start update with max available size
                     Update.printError(Serial);
                 }
@@ -269,7 +279,7 @@ void setupWebServer() {
             }
             if (final) {
                 if (Update.end(true)) { // true = successful
-                    Serial.printf("Update Success: %u bytes\n", index+len);
+                    LOGF("Update Success: %u bytes\n", index+len);
                 } else {
                     Update.printError(Serial);
                 }
@@ -447,32 +457,38 @@ void startWifi() {
     prefs.end();
 
     if (ssid.length() > 0) {
-        // Wir haben eine gespeicherte SSID → direkt verbinden
-        WiFi.begin(ssid.c_str(), pass.c_str());
-        Serial.printf("[WiFi] Connecting to SSID: %s\n", ssid.c_str());
-        setupWebServer();
+        setupWiFiEvents();
 
+        LOGF("[WiFi] Connecting to SSID: %s\n", ssid.c_str());
+
+        WiFi.begin(ssid.c_str(), pass.c_str());
+        WiFi.setAutoReconnect(true);
+        WiFi.persistent(true);
+        
         while (WiFi.status() != WL_CONNECTED) {
             delay(500);
             Serial.print(".");
         }
-        Serial.println();
-        Serial.printf("[WiFi] Connected to %s\n", WiFi.SSID().c_str());
-        Serial.printf("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
 
-        WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-            if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
-                Serial.println("[WiFi] Disconnected, trying to reconnect...");
-                
-                while (WiFi.status() != WL_CONNECTED) {
-                    WiFi.reconnect();
-                    delay(5000);
-                    Serial.print(".");
-                }
-            }
-        });
+        LOG();
     } else {
-        // Keine gespeicherte SSID → Config Portal starten
         startConfigPortal();
     }
+}
+
+void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    LOG("Connected to AP successfully!");
+}
+
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+    LOGF("[WiFi] Connected to %s\n", WiFi.SSID().c_str());
+    LOGF("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
+}
+
+void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    LOG("Disconnected from WiFi access point");
+    LOGF("WiFi lost connection. Reason: %s", info.wifi_sta_disconnected.reason);
+    LOG("Trying to Reconnect");
+    
+    startWifi();
 }

@@ -59,6 +59,13 @@ Contributions, feedback, and test results are welcome!
   <em>Cycloidal Drive Sliced View</em>
 </p>
 
+<p align="center">
+  <img src="hardware/images/HA_Controls.png" alt="Home Assistant controls" width="300"/>
+  <img src="hardware/images/HA_Sensors.png" alt="Home Assistant sensors" width="300"/>
+  <br/>
+  <em>Home Assistant</em>
+</p>
+
 ---
 
 ## 📁 Project Structure

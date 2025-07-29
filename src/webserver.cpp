@@ -18,7 +18,7 @@ extern PresetSelection selectedPreset;
 extern uint16_t presetSmall;
 extern uint16_t presetLarge;
 extern void savePreferences();
-extern void startGrinding(bool tareScale);
+extern void startGrinding(bool tare);
 extern void setPreset(PresetSelection selection);
 extern bool webStart;
 extern void setState(State s);

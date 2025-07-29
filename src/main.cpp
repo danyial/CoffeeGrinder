@@ -171,7 +171,7 @@ void setupButtons();
 void setupStepper();
 
 // Begin the grinding process, optionally taring the scale
-void startGrinding(bool tareScale);
+void startGrinding(bool tare);
 
 // Reset the scale to zero
 void tareScale();
@@ -374,8 +374,6 @@ void loop()
     case CALIBRATE:
         if (btnStart.fell())
         {
-            // scale.tare();
-
             long reading = scale.get_value(10);
             LOGF("Raw reading: %ld", reading);
 
@@ -435,14 +433,16 @@ void calibrateScale()
 
 void tareScale() {
     LOG("Tare Scale");
+    delay(1500);
     scale.tare();
+    delay(1500);
 }
 
 // Start grinding: reset timer, tare scale if state is IDLE and change state to RUNNING
-void startGrinding(bool tareScale)
+void startGrinding(bool tare)
 {
-    if (state == IDLE && tareScale == true) {
-        scale.tare();
+    if (state == IDLE && tare == true) {
+        tareScale();
     }
 
     lastMillis = millis();

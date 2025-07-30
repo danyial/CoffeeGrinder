@@ -310,6 +310,8 @@ void loop()
 
         break;
     case MEASURING:
+        delay(1500);
+        
         if (weight * 10 >= remaining) {
             setState(FINISHED);
         } else {
@@ -598,12 +600,14 @@ void drawDisplay()
         sprintf(buf, "%4.1fg", (selectedPreset == SMALL ? presetSmall : presetLarge) / 10.0);
         break;
     case WEIGHING:
-    case RUNNING:
-        // float weight = scale.get_units();
         sprintf(buf, "%4.1fg", weight);
         break;
+    case RUNNING:
+        // float weight = scale.get_units();
+        sprintf(buf, "%4.1fg", (remaining / 10.0) - weight);
+        break;
     case PAUSED:
-        sprintf(buf, "%4.1fg", remaining / 10.0);
+        sprintf(buf, "%4.1fg", (remaining / 10.0) - weight);
         break;
     case MEASURING:
         sprintf(buf, "Warte...");

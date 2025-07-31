@@ -33,3 +33,8 @@ enum State
     UNKNOWN,
     WEIGHING
 };
+
+enum Rotation {
+    CW = 1,
+    CCW = -1
+};

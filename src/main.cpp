@@ -32,6 +32,8 @@ AccelStepper stepper(AccelStepper::DRIVER, PIN_STEP, PIN_DIR);
 HX711 scale;
 
 
+constexpr Rotation STEPPER_ROTATION = CCW;
+
 // Maximum speed of the stepper motor in steps per second
 constexpr float MAX_STEPPER_SPEED = 10000.0;
 
@@ -233,7 +235,7 @@ void setupStepper()
     digitalWrite(PIN_ENABLE, HIGH);
     stepper.setMaxSpeed(MAX_STEPPER_SPEED);
     stepper.setAcceleration(STEPPER_ACCELERATION);
-    stepper.setSpeed(speed);
+    stepper.setSpeed(speed * static_cast<int>(STEPPER_ROTATION));
 }
 
 // Main loop handling state machine and button updates
@@ -265,7 +267,7 @@ void loop()
         handleButton(btnR, LARGE);
 
         break;
-    case RUNNING:
+    case RUNNING: {
         if (digitalRead(PIN_ENABLE) == HIGH)
         {
             digitalWrite(PIN_ENABLE, LOW);
@@ -278,9 +280,15 @@ void loop()
             reverseAttempts = 0;
         }
 
-        if (stepper.speed() > 0 && now - lastWeightChangeTime >= 2000) {
+        float currentStepperSpeed = stepper.speed();
+        float runSpeed = STEPPER_RUN_SPEED * static_cast<int>(STEPPER_ROTATION);
+        float reverseSpeed = -runSpeed;
+
+        bool notBlockedCheck = STEPPER_ROTATION == CW ? currentStepperSpeed > 0 : currentStepperSpeed < 0;
+
+        if (notBlockedCheck && now - lastWeightChangeTime >= 2000) {
             if (reverseAttempts < 3) {
-                stepper.setSpeed(-speed);
+                stepper.setSpeed(reverseSpeed);
                 lastWeightChangeTime = now;
                 reverseAttempts++;
             } else {
@@ -288,8 +296,8 @@ void loop()
                 reverseAttempts = 0;
                 setState(EMPTY);
             }
-        } else if (stepper.speed() < 0 && now - lastWeightChangeTime >= 500) {
-            stepper.setSpeed(speed);
+        } else if (!notBlockedCheck && now - lastWeightChangeTime >= 500) {
+            stepper.setSpeed(runSpeed);
             lastWeightChangeTime = now;
         }
 
@@ -309,9 +317,10 @@ void loop()
         }
 
         break;
+    }
     case MEASURING:
         delay(1500);
-        
+
         if (weight * 10 >= remaining) {
             setState(FINISHED);
         } else {

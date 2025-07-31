@@ -1,2 +1,2 @@
 #pragma once
-#define CURRENT_VERSION "v0.0.17"
+#define CURRENT_VERSION "v0.0.18"

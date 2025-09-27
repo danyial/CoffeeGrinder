@@ -1,14 +1,22 @@
 #pragma once
 
+#include <Arduino.h>
+
 #ifndef ENABLE_LOGGING
 #define ENABLE_LOGGING true
 #endif
 
 #if ENABLE_LOGGING
-#define LOG(x) Serial.println(x)
-#define LOGF(fmt, ...) Serial.printf((fmt), __VA_ARGS__)
+void logPrint();
+void logPrint(const String &msg);
+void logPrint(const __FlashStringHelper *msg);
+void logPrint(const char *msg);
+void logPrintf(const char *fmt, ...);
+
+#define LOG(...) logPrint(__VA_ARGS__)
+#define LOGF(fmt, ...) logPrintf((fmt), ##__VA_ARGS__)
 #else
-#define LOG(x)
+#define LOG(...)
 #define LOGF(fmt, ...)
 #endif
 

@@ -1,15 +1,15 @@
 #pragma once
 
-// Step pin for stepper driver
-#define PIN_STEP 18
-// Direction pin for stepper driver
-#define PIN_DIR 5
-// Enable pin for driver (LOW = enabled)
-#define PIN_ENABLE 19
+// ESC pin
+#define PIN_ESC 5
+// ESP32 RX2 -> PDN_UART
+#define TMC_RX_PIN 16
+// ESP32 TX2 -> PDN_UART
+#define TMC_TX_PIN 17
 
 // HX711 pins (alternative free pins)
-#define HX_DT 32
-#define HX_SCK 33
+#define HX_DT 33
+#define HX_SCK 32
 
 // Button pin for selecting left preset
 const int BTN_L = 27;

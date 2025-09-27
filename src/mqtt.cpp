@@ -7,10 +7,10 @@
 #include "version.h"
 
 // MQTT-Config
-const char *mqtt_server = "";
-const uint16_t mqtt_port = 0;
-const char *mqtt_user = "";
-const char *mqtt_pass = "";
+static String mqttServer;
+static uint16_t mqttPort = 0;
+static String mqttUser;
+static String mqttPass;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -74,6 +74,13 @@ void callback(char *topic, byte *payload, unsigned int length)
         webStart = true;
         startGrinding(true);
     }
+    else if (String(topic) == "coffeegrinder/" + mqttIdentifier + "/cmd/stop")
+    {
+        extern bool webStart;
+        extern void startGrinding(bool);
+        webStart = true;
+        startGrinding(true);
+    }
     else if (String(topic) == "coffeegrinder/" + mqttIdentifier + "/cmd/start_right")
     {
         extern bool webStart;
@@ -116,17 +123,17 @@ void reconnect()
 {
     while (!mqttClient.connected())
     {
-        if (mqttClient.connect("CoffeeGrinder", mqtt_user, mqtt_pass, ("coffeegrinder/" + mqttIdentifier + "/status").c_str(), 1, true, "offline"))
+        if (mqttClient.connect(mqttIdentifier.c_str(), mqttUser.c_str(), mqttPass.c_str(), ("coffeegrinder/" + mqttIdentifier + "/status").c_str(), 1, true, "offline"))
         {
             // Publish online status after successful connection
             mqttClient.publish(("coffeegrinder/" + mqttIdentifier + "/status").c_str(), "online", true);
-            mqttClient.subscribe("coffeegrinder/#");
+            mqttClient.subscribe(("coffeegrinder/" + mqttIdentifier + "/#").c_str());
 
             publishConfigsForHA();
         }
         else
         {
-            delay(5000);
+            delay(2000);
         }
     }
 }
@@ -147,7 +154,7 @@ void publishConfig(const char* topic, std::function<void(JsonDocument&)> buildPa
 
     doc.shrinkToFit();
 
-    char payload[512];
+    static char payload[1024];
     serializeJson(doc, payload);
     LOGF("[TOPIC] %s\n", topic);
     LOGF("[PAYLOAD] %s\n", payload);
@@ -171,8 +178,9 @@ void setupMqtt() {
 
     mqttClient.setServer(server.c_str(), port);
     mqttClient.setCallback(callback);
-    mqtt_user = user.c_str();
-    mqtt_pass = pass.c_str();
+    mqttClient.setKeepAlive(60);
+    mqttUser = user;
+    mqttPass = pass;
 
     reconnect();
 }
@@ -267,7 +275,8 @@ void publishConfigsForHA() {
         doc["name"] = "Scale Factor";
         doc["unique_id"] = mqttIdentifier + "_scale_factor";
         doc["state_topic"] = "coffeegrinder/" + mqttIdentifier + "/scale_factor";
-
+        doc["enabled_by_default"] = false;
+        
         JsonObject device = doc["device"].to<JsonObject>();
         addDeviceBlock(device);
     });
@@ -309,6 +318,16 @@ void publishConfigsForHA() {
         doc["name"] = "Press Start";
         doc["unique_id"] = mqttIdentifier + "_cmd_start";
         doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/start";
+
+        JsonObject device = doc["device"].to<JsonObject>();
+        addDeviceBlock(device);
+    });
+
+    // Button: Start
+    publishConfig(("homeassistant/button/" + mqttIdentifier + "/stop/config").c_str(), [](JsonDocument& doc) {
+        doc["name"] = "Press Stop";
+        doc["unique_id"] = mqttIdentifier + "_cmd_stop";
+        doc["command_topic"] = "coffeegrinder/" + mqttIdentifier + "/cmd/stop";
 
         JsonObject device = doc["device"].to<JsonObject>();
         addDeviceBlock(device);

@@ -19,12 +19,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Set up PlatformIO
         run: |
           python -m pip install --upgrade pip
-          pip install platformio
+          pip install -U platformio
 
       - name: Install platformIO libraries
         run: pio lib install

@@ -1,4 +1,4 @@
-24281125386122743
+24282879780528103
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -6593,6 +6593,13 @@ connector side-entry ATA PATA IDE 5.25 inch floppy drive power
 0
 6
 5
+Connector
+MODULE_TMC2209_SILENTSTEPSTICK
+
+
+0
+18
+18
 Connector
 NS-Tech_Grove_1x04_P2mm_Vertical
 https://statics3.seeedstudio.com/images/opl/datasheet/3470130P1.pdf
